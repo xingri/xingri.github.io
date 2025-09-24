@@ -6,6 +6,7 @@
 <body>
 
     <button id="downloadLogBtn">Download Log</button>
+    <button id="playBtn">Play</button>
 
     <h1>Video Test</h1>
     
@@ -29,6 +30,16 @@
     function getLogBlob() {
         return new Blob(logChunks, { type: "text/plain" });
     }
+
+    document.getElementById('playBtn').addEventListener('click', async () => {
+        try {
+            const video = document.getElementById('video');
+            await video.play();
+            writeLog("playing");
+        } catch (error) {
+            writeLog(`Error: ${error}`);
+        }
+    });
 
     document.getElementById('downloadLogBtn').addEventListener('click', () => {
         const blob = getLogBlob();
