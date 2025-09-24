@@ -56,14 +56,6 @@
     const playButton = document.getElementById('playButton');
     const fsButton = document.getElementById('fsButton');
 
-    // --- Autoplay with sound (may be blocked) ---
-    window.onload = function () {
-      video.play().catch(err => {
-        console.log('Autoplay with sound was blocked:', err);
-        playButton.style.display = 'inline-block'; // show fallback button
-      });
-    };
-
     // Fallback: user-initiated play
     playButton.addEventListener('click', async () => {
       try {
