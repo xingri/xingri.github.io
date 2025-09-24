@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Autoplay Video with Sound + Fullscreen</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      margin: 24px;
+      line-height: 1.4;
+    }
+    .controls {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    button {
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #hint {
+      color: #555;
+      font-size: 13px;
+    }
+    /* Optional: make the video scale nicely */
+    #myVideo {
+      width: 100%;
+      max-width: 800px;
+      height: auto;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <h1>Video Demo</h1>
+
+  <video
+    id="myVideo"
+    controls
+    playsinline
+  >
+    <source src="chrome.mp4" type="video/mp4port the video tag.
+  </video>
+
+  <div class="controls">
+    <button id="playButton" style="display:none;">Play Video</button>
+    <button id="fsButton" type="button">Enter Fullscreen</button>
+    <span id="hint">Tip: Double‑click the video or press <kbd>F</kbd> to toggle fullscreen.</span>
+  </div>
+
+  <script>
+    const video = document.getElementById('myVideo');
+    const playButton = document.getElementById('playButton');
+    const fsButton = document.getElementById('fsButton');
+
+    // --- Autoplay with sound (may be blocked) ---
+    window.onload = function () {
+      video.play().catch(err => {
+        console.log('Autoplay with sound was blocked:', err);
+        playButton.style.display = 'inline-block'; // show fallback button
+      });
+    };
+
+    // Fallback: user-initiated play
+    playButton.addEventListener('click', async () => {
+      try {
+        await video.play();
+        playButton.style.display = 'none';
+      } catch (e) {
+        console.log('Play failed:', e);
+      }
+    });
+
+    // --- Fullscreen helpers (cross-browser) ---
+    function isFullscreen() {
+      return document.fullscreenElement ||
+             document.webkitFullscreenElement ||
+             document.mozFullScreenElement ||
+             document.msFullscreenElement;
+    }
+
+    function enterFullscreen(el) {
+      if (el.requestFullscreen) return el.requestFullscreen();
+      if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();   // Safari
+      if (el.mozRequestFullScreen) return el.mozRequestFullScreen();         // Old Firefox
+      if (el.msRequestFullscreen) return el.msRequestFullscreen();           // IE/Edge legacy
+    }
+
+    function exitFullscreen() {
+      if (document.exitFullscreen) return document.exitFullscreen();
+      if (document.webkitExitFullscreen) return document.webkitExitFullscreen(); // Safari
+      if (document.mozCancelFullScreen) return document.mozCancelFullScreen();   // Old Firefox
+      if (document.msExitFullscreen) return document.msExitFullscreen();         // IE/Edge legacy
+    }
+
+    function updateFsButtonLabel() {
+      fsButton.textContent = isFullscreen() ? 'Exit Fullscreen' : 'Enter Fullscreen';
+    }
+
+    async function toggleFullscreen() {
+      try {
+        if (isFullscreen()) {
+          await exitFullscreen();
+        } else {
+          // Request fullscreen on the video element
+          await enterFullscreen(video);
+        }
+      } catch (e) {
+        console.log('Fullscreen toggle failed:', e);
+      } finally {
+        updateFsButtonLabel();
+      }
+    }
+
+    // Button click toggles fullscreen
+    fsButton.addEventListener('click', toggleFullscreen);
+
+    // Double-click video toggles fullscreen
+    video.addEventListener('dblclick', toggleFullscreen);
+
+    // Keyboard: press "F" to toggle fullscreen (when page is focused)
+    document.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      }
+    });
+
+    // Keep button label in sync with fullscreen state
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+      .forEach(ev => document.addEventListener(ev, updateFsButtonLabel));
+
+    // Initialize label
+    updateFsButtonLabel();
+  </script>
+</body>
+</html>
+
