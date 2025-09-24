@@ -5,6 +5,8 @@
 </head>
 <body>
 
+    <button id="downloadLogBtn">Download Log</button>
+
     <h1>Video Test</h1>
     
     <video width="640" height="360" controls>
@@ -13,4 +15,31 @@
     </video>
 
 </body>
+<script>
+    // Create a Blob and a writable stream to log messages
+    let logChunks = [];
+
+    // Function to write a log message to the blob
+    async function writeLog(message) {
+        logChunks.push(new Date().toISOString() + " " + message + "\n");
+        console.log(message);
+    }
+
+    // Function to get a Blob of the log so far
+    function getLogBlob() {
+        return new Blob(logChunks, { type: "text/plain" });
+    }
+
+    document.getElementById('downloadLogBtn').addEventListener('click', () => {
+        const blob = getLogBlob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `log-${new Date().toISOString()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+</script>
 </html>
