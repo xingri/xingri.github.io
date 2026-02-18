@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>SW Disk Cache / Persistence Probe</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; padding: 16px; }
+    button { padding: 8px 12px; margin-right: 8px; }
+    pre { background: #111; color: #0f0; padding: 12px; overflow: auto; }
+    .hint { color: #555; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Service Worker Cache “Disk” / Persistence Probe</h2>
+
+  <p>
+    This page registers a Service Worker and writes a test entry to Cache Storage.
+    Then it checks whether it can still read it later (after reload).
+  </p>
+
+  <div>
+    <button id="btnRegister">Register SW</button>
+    <button id="btnProbe">Run probe</button>
+    <button id="btnReload">Reload page</button>
+    <button id="btnClear">Clear test cache</button>
+  </div>
+
+  <p class="hint">
+    ⚠️ Notes:
+    <br>- Run on <b>https</b> or <b>http://localhost</b>.
+    <br>- Try a normal reload first. “Hard reload / bypass cache” can invalidate results.
+  </p>
+
+  <pre id="log"></pre>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const TEST_CACHE = 'sw-persistence-probe-v1';
+    const TEST_URL = '/probe-resource.txt'; // served by SW
+    const TEST_MARKER_HEADER = 'x-probe-marker';
+
+    function log(...args) {
+      logEl.textContent += args.join(' ') + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function registerSW() {
+      if (!('serviceWorker' in navigator)) {
+        log('❌ serviceWorker not supported');
+        return;
+      }
+      try {
+        const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+        log('✅ SW registered:', reg.scope);
+
+        // Ensure active controlling SW (may require one reload on first install)
+        await navigator.serviceWorker.ready;
+        log('✅ SW ready');
+
+        if (!navigator.serviceWorker.controller) {
+          log('ℹ️ No SW controller yet. Reload once so the SW controls this page.');
+        } else {
+          log('✅ This page is controlled by a SW.');
+        }
+      } catch (e) {
+        log('❌ SW registration failed:', e.message);
+      }
+    }
+
+    async function storageInfo() {
+      if (navigator.storage?.estimate) {
+        const { usage, quota } = await navigator.storage.estimate();
+        log(`ℹ️ storage.estimate(): usage=${usage ?? 'n/a'} quota=${quota ?? 'n/a'}`);
+      } else {
+        log('ℹ️ storage.estimate() not supported');
+      }
+
+      if (navigator.storage?.persisted) {
+        const persisted = await navigator.storage.persisted();
+        log(`ℹ️ storage.persisted(): ${persisted}`);
+        if (!persisted && navigator.storage.persist) {
+          log('ℹ️ You can request persistence (user gesture may be required).');
+        }
+      } else {
+        log('ℹ️ storage.persisted() not supported');
+      }
+    }
+
+    async function runProbe() {
+      log('--- Probe start ---');
+
+      if (!navigator.serviceWorker.controller) {
+        log('❌ Page not controlled by SW. Click "Register SW" then reload once.');
+        return;
+      }
+
+      await storageInfo();
+
+      // 1) Fetch a SW-served resource and store it in Cache Storage
+      const cache = await caches.open(TEST_CACHE);
+
+      // If already cached, note it
+      const existing = await cache.match(TEST_URL);
+      if (existing) {
+        const marker = existing.headers.get(TEST_MARKER_HEADER);
+        log('✅ Test entry already in cache. marker=', marker);
+      } else {
+        log('ℹ️ No existing test entry found. Creating one now...');
+      }
+
+      // Force fetch (SW responds) and then cache it
+      const res = await fetch(TEST_URL, { cache: 'no-store' });
+      const text = await res.text();
+      log('✅ Fetched probe resource:', text.trim());
+
+      // Recreate a Response because res body is consumed
+      const stored = new Response(text, {
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          [TEST_MARKER_HEADER]: String(Date.now())
+        }
+      });
+      await cache.put(TEST_URL, stored);
+      log('✅ Stored probe response in Cache Storage:', TEST_CACHE, TEST_URL);
+
+      // 2) Verify it can be read back immediately
+      const roundtrip = await cache.match(TEST_URL);
+      if (!roundtrip) {
+        log('❌ Roundtrip read failed (cache.match returned null).');
+        return;
+      }
+      log('✅ Roundtrip read ok. marker=', roundtrip.headers.get(TEST_MARKER_HEADER));
+
+      log('--- Probe done ---');
+      log('Next: reload the page (normal reload), then run probe again.');
+      log('If the entry survives reload(s), caching is likely persistent (often disk-backed).');
+    }
+
+    async function clearCache() {
+      const ok = await caches.delete(TEST_CACHE);
+      log(ok ? '✅ Deleted test cache' : 'ℹ️ Test cache not found');
+    }
+
+    document.getElementById('btnRegister').addEventListener('click', registerSW);
+    document.getElementById('btnProbe').addEventListener('click', runProbe);
+    document.getElementById('btnReload').addEventListener('click', () => location.reload());
+    document.getElementById('btnClear').addEventListener('click', clearCache);
+
+    // Auto-log basic info
+    log('User agent:', navigator.userAgent);
+    log('Secure context:', window.isSecureContext);
+  </script>
+</body>
+</html>
