@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Service Worker Registration Test</title>
+  <style>
+    body { font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+    code, pre { background: #f6f8fa; padding: 2px 4px; border-radius: 4px; }
+    pre { padding: 12px; overflow: auto; }
+    .ok { color: #0a7a0a; font-weight: 600; }
+    .bad { color: #b00020; font-weight: 600; }
+    .row { margin: 10px 0; }
+    button { padding: 8px 12px; margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Service Worker Registration Test</h1>
+
+  <div class="row">
+    <b>Target SW script:</b>
+    <div><code id="swUrl"></code></div>
+  </div>
+
+  <div class="row">
+    <b>Target scope:</b>
+    <div><code id="swScope"></code></div>
+  </div>
+
+  <div class="row">
+    <button id="btnDiag">Run diagnostics</button>
+    <button id="btnReg">Register</button>
+    <button id="btnUnreg">Unregister (this origin)</button>
+    <button id="btnHardReset">Hard reset (unregister + clear caches)</button>
+  </div>
+
+  <h2>Status</h2>
+  <pre id="out"></pre>
+
+  <script src="./sw-test.js"></script>
+</body>
+</html>
