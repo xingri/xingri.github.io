@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEVC Decoding Check</title>
+</head>
+<body>
+    <div id="logDiv"></div>
+    <p>
+    <div id="logDiv2"></div>
+
+<script>
+    function log(msg)
+    {
+       logDiv.innerHTML += msg + "<br>";
+    }
+
+    function log2(msg)
+    {
+       logDiv2.innerHTML += msg + "<br>";
+    }
+
+    if ('mediaCapabilities' in navigator) {
+        const videoFileConfiguration = {
+            type: 'webrtc',
+            video: {
+                contentType: 'video/H265', // Corrected MIME type
+                width: 1920, // Video width
+                height: 1080, // Video height
+                bitrate: 5000000, // Bitrate (adjust as needed)
+                framerate: 30, // Set the desired framerate (e.g., 30 frames per second)
+            },
+        };
+
+        logDiv.innerHTML = "";
+        navigator.mediaCapabilities.decodingInfo(videoFileConfiguration)
+            .then((result) => {
+                if (result.supported) {
+                    console.log('H.265 decoding is supported.');
+                    console.log('Power efficiency:', result.powerEfficient);
+		    log('H.265 decoding is supported.');
+		    if (result.powerEfficient)
+		        log('H.265 is power efficient');
+                } else {
+                    console.log('H.265 decoding is not supported.');
+		    log('H.265 decoding is not supported.');
+                }
+            })
+            .catch((error) => {
+                console.error('Error checking H.265 support:', error);
+		log('Error checking H.265 support:', error);
+            });
+
+        const videoFileConfiguration2 = {
+            type: 'webrtc',
+            video: {
+                contentType: 'video/av1', // Corrected MIME type
+                width: 1920, // Video width
+                height: 1080, // Video height
+                bitrate: 5000000, // Bitrate (adjust as needed)
+                framerate: 30, // Set the desired framerate (e.g., 30 frames per second)
+            },
+        };
+
+        logDiv2.innerHTML = "";
+        navigator.mediaCapabilities.decodingInfo(videoFileConfiguration2)
+            .then((result) => {
+                if (result.supported) {
+                    console.log('AV1 decoding is supported.');
+                    console.log('Power efficiency:', result.powerEfficient);
+		    log2('AV1 decoding is supported.');
+		    if (result.powerEfficient)
+		        log2('AV1 is power efficient');
+                } else {
+                    console.log('AV1 decoding is not supported.');
+		    log2('AV1 decoding is not supported.');
+                }
+            })
+            .catch((error) => {
+                console.error('Error checking AV1 support:', error);
+		log2('Error checking AV1 support:', error);
+            });
+    }
+
+
+</script>
+
+</body>
+</html>
+
