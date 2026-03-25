@@ -1,0 +1,286 @@
+<html>
+<div class="card">
+  <h2>Audio + Mic Routing Test</h2>
+
+  <!-- Session policy toggle -->
+  <label style="display:flex; gap:10px; align-items:center;">
+    <input type="checkbox" id="forcePlayAndRecord" checked />
+    Force <code>audioSession.type = "play-and-record"</code>
+    before <b>play</b> and <b>mic capture</b>
+  </label>
+
+  <!-- New: constraints UI -->
+  <fieldset
+    style="margin-top:14px; padding:12px; border-radius:10px;
+           border:1px solid #ddd;"
+  >
+    <legend style="padding:0 6px;">Mic constraints</legend>
+
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
+      <label style="display:flex; gap:8px; align-items:center;">
+        <input type="checkbox" id="chkAutoGain" checked />
+        autoGainControl
+      </label>
+
+      <label style="display:flex; gap:8px; align-items:center;">
+        <input type="checkbox" id="chkEcho" checked />
+        echoCancellation
+      </label>
+
+      <label style="display:flex; gap:8px; align-items:center;">
+        <input type="checkbox" id="chkNoise" checked />
+        noiseSuppression
+      </label>
+
+      <label style="display:flex; gap:8px; align-items:center;">
+        sampleRate
+        <select id="selSampleRate">
+          <option value="">(default)</option>
+          <option value="8000">8000</option>
+          <option value="16000">16000</option>
+          <option value="24000">24000</option>
+          <option value="32000">32000</option>
+          <option value="44100">44100</option>
+          <option value="48000">48000</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button id="previewConstraintsBtn" type="button">
+        Preview constraints
+      </button>
+      <span id="constraintsPreview"
+            style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">
+      </span>
+    </div>
+  </fieldset>
+
+  <!-- Actions -->
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+    <label style="display:flex; gap:6px; align-items:center;">
+      Format:
+      <select id="selBirdFormat">
+        <option value="birds.mp3">MP3</option>
+        <option value="birds.wav">WAV</option>
+      </select>
+    </label>
+
+    <button id="playBtn">Play</button>
+    <button id="stopBtn">Stop</button>
+    <button id="micStartBtn">Start mic</button>
+    <button id="micStopBtn">Stop mic</button>
+  </div>
+
+  <div id="status" style="margin-top:10px;"></div>
+  <pre id="log"
+       style="background:#111;color:#eee;padding:10px;border-radius:8px;
+              white-space:pre-wrap;max-height:240px;overflow:auto;"></pre>
+
+  <audio id="birdAudio" preload="auto" loop playsinline></audio>
+</div>
+
+<script>
+  const forceToggle = document.getElementById('forcePlayAndRecord');
+
+  const chkAutoGain = document.getElementById('chkAutoGain');
+  const chkEcho = document.getElementById('chkEcho');
+  const chkNoise = document.getElementById('chkNoise');
+  const selSampleRate = document.getElementById('selSampleRate');
+
+  const previewBtn = document.getElementById('previewConstraintsBtn');
+  const previewEl = document.getElementById('constraintsPreview');
+
+  const playBtn = document.getElementById('playBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const micStartBtn = document.getElementById('micStartBtn');
+  const micStopBtn = document.getElementById('micStopBtn');
+
+  const audio = document.getElementById('birdAudio');
+  const statusEl = document.getElementById('status');
+  const logEl = document.getElementById('log');
+
+  let micStream = null;
+
+  function setStatus(msg) {
+    statusEl.textContent = msg;
+  }
+
+  function log(msg) {
+    const t = new Date().toISOString();
+    logEl.textContent += `[${t}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function hasAudioSession() {
+    return 'audioSession' in navigator;
+  }
+
+  function getSessionType() {
+    return hasAudioSession() ? navigator.audioSession.type : 'n/a';
+  }
+
+  function getSessionState() {
+    return hasAudioSession() ? navigator.audioSession.state : 'n/a';
+  }
+
+  // Apply play-and-record only when toggle is enabled
+  function applySessionPolicyIfNeeded() {
+    if (!forceToggle.checked) {
+      log('Toggle OFF: leaving audioSession.type unchanged.');
+      return;
+    }
+
+    if (!hasAudioSession()) {
+      log('AudioSession API not available in this browser.');
+      return;
+    }
+
+    navigator.audioSession.type = 'play-and-record';
+    log(`Set audioSession.type = "play-and-record" `
+        + `(type=${getSessionType()}, state=${getSessionState()})`);
+  }
+
+  // Build constraints object from UI
+  function buildAudioConstraints() {
+    const audioConstraints = {
+      autoGainControl: chkAutoGain.checked,
+      echoCancellation: chkEcho.checked,
+      noiseSuppression: chkNoise.checked,
+    };
+
+    if (selSampleRate.value) {
+      audioConstraints.sampleRate = parseInt(selSampleRate.value, 10);
+    }
+
+    return audioConstraints;
+  }
+
+  // UI: preview constraints
+  function updateConstraintsPreview() {
+    const c = buildAudioConstraints();
+    previewEl.textContent = JSON.stringify(c);
+  }
+
+  function mimeForFile(file) {
+    const lower = file.toLowerCase();
+
+    if (lower.endsWith('.mp3')) {
+      return 'audio/mpeg';
+    }
+    if (lower.endsWith('.wav')) {
+      // Some servers/browsers use audio/x-wav, but audio/wav is standard.
+      return 'audio/wav';
+    }
+    return '';
+  }
+
+  const selBirdFormat = document.getElementById('selBirdFormat');
+
+  function setAudioSourceFromSelection(options = { stopIfPlaying: true }) {
+    const nextSrc = selBirdFormat.value;
+
+    if (options.stopIfPlaying && !audio.paused) {
+      audio.pause();
+      audio.currentTime = 0;
+      log('Stopped audio due to format switch');
+    }
+
+    audio.src = nextSrc;
+    audio.type = mimeForFile(nextSrc);
+    audio.load();
+
+    log(`Audio source set to: ${nextSrc}`);
+    log(`Audio type set to: ${mimeForFile(nextSrc)}`);
+    setStatus(`Selected: ${nextSrc}`);
+  }
+
+  // Initialize on page load
+  setAudioSourceFromSelection({ stopIfPlaying: false });
+
+  // Update when user changes selection
+  selBirdFormat.addEventListener('change', () => {
+    setAudioSourceFromSelection({ stopIfPlaying: true });
+  });
+
+  previewBtn.addEventListener('click', updateConstraintsPreview);
+  chkAutoGain.addEventListener('change', updateConstraintsPreview);
+  chkEcho.addEventListener('change', updateConstraintsPreview);
+  chkNoise.addEventListener('change', updateConstraintsPreview);
+  selSampleRate.addEventListener('change', updateConstraintsPreview);
+  updateConstraintsPreview();
+
+  // Observe interruptions / state changes (optional but useful)
+  if (hasAudioSession()) {
+    navigator.audioSession.onstatechange = () => {
+      log(`audioSession.state changed -> ${getSessionState()}`);
+    };
+    log(`AudioSession available: type=${getSessionType()}, `
+        + `state=${getSessionState()}`);
+  } else {
+    log('AudioSession NOT available (expected on non Safari browsers).');
+  }
+
+  // Buttons
+  playBtn.addEventListener('click', async () => {
+    applySessionPolicyIfNeeded();
+    setAudioSourceFromSelection();
+    try {
+      setStatus('Starting playback…');
+      log('Calling audio.play()');
+      await audio.play();
+      setStatus('Playing Audio');
+      log('audio.play() resolved');
+    } catch (e) {
+      setStatus(`Play failed: ${e?.message ?? e}`);
+      log(`audio.play() failed: ${e?.message ?? e}`);
+    }
+  });
+
+  stopBtn.addEventListener('click', () => {
+    audio.pause();
+    audio.currentTime = 0;
+    setStatus('Stopped Audio');
+    log('Audio stopped');
+  });
+
+  micStartBtn.addEventListener('click', async () => {
+    applySessionPolicyIfNeeded();
+    const audioConstraints = buildAudioConstraints();
+    log(`getUserMedia audio constraints: ${JSON.stringify(audioConstraints)}`);
+
+    try {
+      setStatus('Starting mic…');
+      log('Calling getUserMedia({ audio: constraints, video: false })');
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: audioConstraints,
+        video: false,
+      });
+      setStatus('Mic active');
+      log('getUserMedia resolved (mic active)');
+    } catch (e) {
+      setStatus(`Mic failed: ${e?.name ?? ''} ${e?.message ?? e}`);
+      log(`getUserMedia failed: ${e?.name ?? ''} ${e?.message ?? e}`);
+    }
+  });
+
+  micStopBtn.addEventListener('click', () => {
+    if (!micStream) {
+      log('Mic not active.');
+      return;
+    }
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+    setStatus('Mic stopped');
+    log('Mic stopped (tracks stopped).');
+  });
+
+  // Extra media error logging
+  audio.addEventListener('error', () => {
+    const code = audio.error?.code ?? 'n/a';
+    log(`Audio element error (code ${code})`);
+  });
+
+</script>
+
+</html>
