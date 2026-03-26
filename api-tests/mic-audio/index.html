@@ -2,11 +2,26 @@
 <div class="card">
   <h2>Audio + Mic Routing Test</h2>
 
-  <!-- Session policy toggle -->
-  <label style="display:flex; gap:10px; align-items:center;">
+  <!-- Session policy selector -->
+  <label style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    Audio session type:
+    <select id="audioSessionType">
+      <option value="auto">auto</option>
+      <option value="playback">playback</option>
+      <option value="transient">transient</option>
+      <option value="transient-solo">transient-solo</option>
+      <option value="ambient">ambient</option>
+      <option value="play-and-record" selected>
+        play-and-record
+      </option>
+    </select>
+  </label>
+
+  <!-- Apply timing toggle (keeps your original intent) -->
+  <label style="display:flex; gap:10px; align-items:center; margin-top:8px;">
     <input type="checkbox" id="forcePlayAndRecord" checked />
-    Force <code>audioSession.type = "play-and-record"</code>
-    before <b>play</b> and <b>mic capture</b>
+    Apply <code>audioSession.type</code> before
+    <b>play</b> and <b>mic capture</b>
   </label>
 
   <!-- New: constraints UI -->
@@ -136,8 +151,8 @@
       return;
     }
 
-    navigator.audioSession.type = 'play-and-record';
-    log(`Set audioSession.type = "play-and-record" `
+    navigator.audioSession.type = audioSessionType.value;
+	  log(`Set audioSession.type = ${audioSessionType.value}`
         + `(type=${getSessionType()}, state=${getSessionState()})`);
   }
 
