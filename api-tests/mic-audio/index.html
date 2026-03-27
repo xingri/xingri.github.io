@@ -286,9 +286,22 @@
   micStartBtn.addEventListener('click', async () => {
     applySessionPolicyIfNeeded();
     const audioConstraints = buildAudioConstraints();
+
+    const birdsAudio = document.getElementById('birdAudio');
+    if (!birdsAudio) {
+      setStatus('Missing <audio id="birdAudio"> element');
+      log('Error: #birdAudio not found');
+      return;
+    }
+
     log(`getUserMedia audio constraints: ${JSON.stringify(audioConstraints)}`);
 
     try {
+
+      setStatus('Pausing audio before starting mic');
+      log('Pausing audio before starting mic');
+      audio.pause();
+
       setStatus('Starting mic…');
       log('Calling getUserMedia({ audio: constraints, video: false })');
       micStream = await navigator.mediaDevices.getUserMedia({
@@ -308,14 +321,27 @@
       setStatus('setMicActiveForMediaSession false');
       log('setMicActiveForMediaSession(false)');
 
-      setStatus('Mic started, waiting 5 seconds...');
-      log("Mic started, waiting 5 seconds...");
+      birdsAudio.currentTime = 0;
+      
+      // play() must be user-gesture initiated; since this is inside a click,
+      // it should generally be allowed.
+      await birdsAudio.play();
+
+      setStatus('Play started, waiting 5 seconds...');
+      log("Play started, waiting 5 seconds...");
 
       await new Promise(r => setTimeout(r, 5000));
+
+      birdsAudio.pause();
+      birdsAudio.currentTime = 0;
 
       setMicActiveForMediaSession(true);
       setStatus('setMicActiveForMediaSession true');
       log('setMicActiveForMediaSession(true)');
+
+      setStatus('Bring the audio back');
+      log('Bring the audio back');
+      await birdsAudio.play();
 
     } catch (e) {
       setStatus(`Mic failed: ${e?.name ?? ''} ${e?.message ?? e}`);
