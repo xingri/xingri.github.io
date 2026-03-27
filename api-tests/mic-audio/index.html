@@ -116,6 +116,8 @@
   const logEl = document.getElementById('log');
 
   let micStream = null;
+  let micTrack = null;
+  let micMuted = false;
 
   function setStatus(msg) {
     statusEl.textContent = msg;
@@ -154,6 +156,28 @@
     navigator.audioSession.type = audioSessionType.value;
 	  log(`Set audioSession.type = ${audioSessionType.value}`
         + `(type=${getSessionType()}, state=${getSessionState()})`);
+  }
+
+  function hasMediaSession() {
+    return "mediaSession" in navigator && !!navigator.mediaSession;
+  }
+
+  function setMicActiveForMediaSession(isActive) {
+    // Spec intent: tell UA whether microphone is considered active/muted. 
+    // [1] https://developer.mozilla.org/docs/Web/API/MediaSession/setMicrophoneActive
+    // [2] https://www.w3.org/TR/mediasession/
+    if (!hasMediaSession()) return;
+
+    // Some browsers may expose mediaSession but not this method yet.
+    if (typeof navigator.mediaSession.setMicrophoneActive !== "function") {
+      return;
+    }
+
+    try {
+      navigator.mediaSession.setMicrophoneActive(!!isActive);
+    } catch (e) {
+      // Ignore; this is a best-effort hint to the UA.
+    }
   }
 
   // Build constraints object from UI
@@ -273,6 +297,16 @@
       });
       setStatus('Mic active');
       log('getUserMedia resolved (mic active)');
+
+      micTrack = micStream.getAudioTracks()[0] || null;
+      micMuted = false;
+      if (micTrack) micTrack.enabled = true;
+      
+      // We consider mic "active" when we have a live track AND not muted.
+      setMicActiveForMediaSession(true);
+      setStatus('setMicActiveForMediaSession true');
+      log('setMicActiveForMediaSession(true)');
+
     } catch (e) {
       setStatus(`Mic failed: ${e?.name ?? ''} ${e?.message ?? e}`);
       log(`getUserMedia failed: ${e?.name ?? ''} ${e?.message ?? e}`);
@@ -288,6 +322,14 @@
     micStream = null;
     setStatus('Mic stopped');
     log('Mic stopped (tracks stopped).');
+
+    micTrack = null;
+    micMuted = false;
+
+    // No active mic now.
+    setMicActiveForMediaSession(false);
+    setStatus('setMicActiveForMediaSession false');
+    log('setMicActiveForMediaSession(false)');
   });
 
   // Extra media error logging
