@@ -300,10 +300,9 @@
     log(`getUserMedia audio constraints: ${JSON.stringify(audioConstraints)}`);
 
     try {
-
-      setStatus('Pausing audio before starting mic');
-      log('Pausing audio before starting mic');
-      audio.pause();
+      //setStatus('Pausing audio before starting mic');
+      //log('Pausing audio before starting mic');
+      //audio.pause();
 
       setStatus('Starting mic…');
       log('Calling getUserMedia({ audio: constraints, video: false })');
@@ -319,34 +318,39 @@
       if (micTrack) micTrack.enabled = true;
       
       // We consider mic "active" when we have a live track AND not muted.
-      //setMicActiveForMediaSession(true);
-      setMicActiveForMediaSession(false);
-      setStatus('setMicActiveForMediaSession false');
-      log('setMicActiveForMediaSession(false)');
-
-      birdsAudio.currentTime = 0;
-      
-      // play() must be user-gesture initiated; since this is inside a click,
-      // it should generally be allowed.
-      await birdsAudio.play();
-
-      setStatus('Play started, waiting 5 seconds...');
-      log("Play started, waiting 5 seconds...");
-
-      await new Promise(r => setTimeout(r, 5000));
-
-      birdsAudio.pause();
-      birdsAudio.currentTime = 0;
-
       setMicActiveForMediaSession(true);
-      setStatus('setMicActiveForMediaSession true');
-      log('setMicActiveForMediaSession(true)');
 
-      await new Promise(r => setTimeout(r, 5000));
+      // Following code were evaluated by the guide comment #18
+      // from https://bugs.webkit.org/show_bug.cgi?id=236219 
+      // but did not improve the audio volume issue
+      //
+      //setMicActiveForMediaSession(false);
+      //setStatus('setMicActiveForMediaSession false');
+      //log('setMicActiveForMediaSession(false)');
 
-      setStatus('Bring the audio back');
-      log('Bring the audio back');
-      await birdsAudio.play();
+      //birdsAudio.currentTime = 0;
+      
+      //// play() must be user-gesture initiated; since this is inside a click,
+      //// it should generally be allowed.
+      //await birdsAudio.play();
+
+      //setStatus('Play started, waiting 5 seconds...');
+      //log("Play started, waiting 5 seconds...");
+
+      //await new Promise(r => setTimeout(r, 5000));
+
+      //birdsAudio.pause();
+      //birdsAudio.currentTime = 0;
+
+      //setMicActiveForMediaSession(true);
+      //setStatus('setMicActiveForMediaSession true');
+      //log('setMicActiveForMediaSession(true)');
+
+      //await new Promise(r => setTimeout(r, 5000));
+
+      //setStatus('Bring the audio back');
+      //log('Bring the audio back');
+      //await birdsAudio.play();
 
     } catch (e) {
       setStatus(`Mic failed: ${e?.name ?? ''} ${e?.message ?? e}`);
