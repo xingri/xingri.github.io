@@ -303,6 +303,16 @@
       if (micTrack) micTrack.enabled = true;
       
       // We consider mic "active" when we have a live track AND not muted.
+      //setMicActiveForMediaSession(true);
+      setMicActiveForMediaSession(false);
+      setStatus('setMicActiveForMediaSession false');
+      log('setMicActiveForMediaSession(false)');
+
+      setStatus('Mic started, waiting 5 seconds...');
+      log("Mic started, waiting 5 seconds...");
+
+      await new Promise(r => setTimeout(r, 5000));
+
       setMicActiveForMediaSession(true);
       setStatus('setMicActiveForMediaSession true');
       log('setMicActiveForMediaSession(true)');
