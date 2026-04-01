@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Escape Key Test with KeyboardLock on Safari</title>
+
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        padding: 2rem;
+      }
+
+      button {
+        font-size: 16px;
+        padding: 0.6rem 1rem;
+        margin-right: 1rem;
+        margin-top: 0.5rem;
+      }
+
+      .status {
+        margin-top: 1rem;
+        font-weight: 700;
+      }
+
+      code {
+        background: #f2f2f2;
+        padding: 0.1rem 0.3rem;
+        border-radius: 0.3rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Escape Key Fullscreeen Test</h1>
+
+    <p>
+      Outside fullscreen: Escape uses browser default behavior.<br />
+      Inside fullscreen: Escape is locked (when supported) and handled at the
+      <b>application level</b> to dismiss the settings dialog.
+    </p>
+
+    <button id="enterFullscreen">Enter Fullscreen</button>
+    <button id="exitFullscreen">Exit Fullscreen</button>
+    <button id="openSettings">Open Settings</button>
+
+    <dialog id="settings">
+      <form method="dialog">
+        <p><strong>Settings</strong></p>
+        <p>This dialog should close on Escape even when Escape is keyboard-locked.</p>
+        <button value="close">Close</button>
+      </form>
+    </dialog>
+
+    <div class="status" id="status"></div>
+
+    <script>
+      const status = document.getElementById("status");
+      const settingsDialog = document.getElementById("settings");
+
+      function updateStatus(message) {
+        status.textContent = message;
+      }
+
+      // ---- Fullscreen helpers ----
+      async function enterFullscreen() {
+        try {
+          // NOTE: keyboardLock option is non-standard; included for Safari experiments
+          await document.documentElement.requestFullscreen({
+            keyboardLock: "browser",
+          });
+
+          updateStatus("Entered fullscreen");
+          await lockEscapeIfPossible();
+        } catch (err) {
+          updateStatus("Failed to enter fullscreen: " + err);
+        }
+      }
+
+      async function exitFullscreen() {
+        try {
+          if (document.fullscreenElement) {
+            await document.exitFullscreen();
+          }
+          updateStatus("Exited fullscreen");
+        } catch (err) {
+          updateStatus("Failed to exit fullscreen: " + err);
+        }
+      }
+
+      // ---- Keyboard Lock ----
+      async function lockEscapeIfPossible() {
+        if (
+          !("keyboard" in navigator) ||
+          typeof navigator.keyboard.lock !== "function"
+        ) {
+          updateStatus(
+            "Fullscreen entered, but Keyboard Lock API not supported"
+          );
+          return;
+        }
+
+        try {
+          await navigator.keyboard.lock(["Escape"]);
+          updateStatus("Escape key locked (Keyboard Lock active)");
+        } catch (err) {
+          updateStatus("Keyboard lock failed: " + err);
+        }
+      }
+
+      function unlockKeyboard() {
+        if (
+          "keyboard" in navigator &&
+          typeof navigator.keyboard.unlock === "function"
+        ) {
+          navigator.keyboard.unlock();
+        }
+      }
+
+      // ---- Buttons ----
+      document
+        .getElementById("enterFullscreen")
+        .addEventListener("click", enterFullscreen);
+
+      document
+        .getElementById("exitFullscreen")
+        .addEventListener("click", exitFullscreen);
+
+      document
+        .getElementById("openSettings")
+        .addEventListener("click", () => {
+          settingsDialog.showModal();
+          updateStatus("Settings opened");
+        });
+
+      // ---- Dialog lifecycle ----
+      settingsDialog.addEventListener("close", () => {
+        updateStatus(
+          `Settings closed (returnValue="${settingsDialog.returnValue || ""}")`
+        );
+      });
+
+      // ---- Cleanup on fullscreen exit ----
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement) {
+          unlockKeyboard();
+          updateStatus("Fullscreen exited, Escape restored");
+        }
+      });
+
+      // ---- Escape handling (scoped, Windows-style dismissal) ----
+      document.addEventListener(
+        "keydown",
+        (e) => {
+          if (e.key !== "Escape") return;
+
+          // ✅ If settings dialog is open, Esc dismisses it
+          // This is REQUIRED when Keyboard Lock is active, because
+          // UA default Esc->dialog-close may no longer run.
+          if (settingsDialog.open) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            settingsDialog.close("escape");
+            console.log("Escape: dismissed settings dialog");
+            updateStatus("Escape: dismissed settings dialog");
+            return;
+          }
+
+          // ❌ Otherwise: do NOT blanket-intercept Escape
+          // Let browser / app defaults handle it.
+          if (document.fullscreenElement) {
+            console.log("Escape in fullscreen (no dialog open)");
+            e.preventDefault();
+            e.stopPropagation();
+          } else {
+            console.log("Escape outside fullscreen (browser default)");
+          }
+        },
+        { capture: true }
+      );
+    </script>
+  </body>
+</html>

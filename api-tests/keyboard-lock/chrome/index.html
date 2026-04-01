@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Escape Key Test with KeyboardLock on Chrome</title>
+
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        padding: 2rem;
+      }
+      button {
+        font-size: 16px;
+        padding: 0.6rem 1rem;
+        margin-right: 1rem;
+      }
+      .status {
+        margin-top: 1rem;
+        font-weight: 700;
+      }
+      code {
+        background: #f2f2f2;
+        padding: 0.1rem 0.3rem;
+        border-radius: 0.3rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Escape Key Fullscreen Test</h1>
+
+    <p>
+      Outside fullscreen: Escape is untouched (browser default behavior).<br />
+      Inside fullscreen: Escape handler calls <code>e.preventDefault()</code> and
+      also tries <code>navigator.keyboard.lock(["Escape"])</code>.
+    </p>
+
+    <button id="enterFullscreen">Enter Fullscreen</button>
+    <button id="exitFullscreen">Exit Fullscreen</button>
+
+    <dialog id="settings">
+      <form method="dialog">
+        <p>Settings</p>
+        <button value="close">Close</button>
+      </form>
+    </dialog>
+
+    <button onclick="settings.showModal()">Open settings</button>
+
+    <div class="status" id="status"></div>
+
+    <script>
+      const status = document.getElementById("status");
+
+      function updateStatus(message) {
+        status.textContent = message;
+      }
+
+      // ---- Fullscreen helpers ----
+      async function enterFullscreen() {
+        try {
+          await document.documentElement.requestFullscreen({ keyboardLock: 'browser' });
+          updateStatus("Entered fullscreen");
+          await lockEscapeIfPossible();
+        } catch (err) {
+          updateStatus("Failed to enter fullscreen: " + err);
+        }
+      }
+
+      async function exitFullscreen() {
+        try {
+          if (document.fullscreenElement) {
+            await document.exitFullscreen();
+          }
+          updateStatus("Exited fullscreen");
+        } catch (err) {
+          updateStatus("Failed to exit fullscreen: " + err);
+        }
+      }
+
+      // ---- Keyboard Lock ----
+      async function lockEscapeIfPossible() {
+        if (
+          !("keyboard" in navigator) ||
+          typeof navigator.keyboard.lock !== "function"
+        ) {
+          updateStatus(
+            "Fullscreen entered, but Keyboard Lock API not supported"
+          );
+          return;
+        }
+
+        try {
+          // Only lock Escape (works in Chromium-based browsers)
+          await navigator.keyboard.lock(["Escape"]);
+          updateStatus("Escape key locked in fullscreen");
+        } catch (err) {
+          updateStatus(
+            "Keyboard lock failed (needs user gesture/permission): " + err
+          );
+        }
+      }
+
+      function unlockKeyboard() {
+        if (
+          "keyboard" in navigator &&
+          typeof navigator.keyboard.unlock === "function"
+        ) {
+          navigator.keyboard.unlock();
+        }
+      }
+
+      // ---- Wire buttons ----
+      document
+        .getElementById("enterFullscreen")
+        .addEventListener("click", enterFullscreen);
+
+      document
+        .getElementById("exitFullscreen")
+        .addEventListener("click", exitFullscreen);
+
+      // ---- Cleanup on fullscreen exit ----
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement) {
+          unlockKeyboard();
+          updateStatus("Fullscreen exited, Escape restored");
+        }
+      });
+    </script>
+  </body>
+</html>
