@@ -119,7 +119,7 @@ document.getElementById("start").onclick = async() =>
 
     // Play test audio via AudioContext and route through WebRTC
     const format = document.getElementById('audioFormat').value;
-    const response = await fetch(`https://xingri.github.io/api-tests/mic-audio/streo-test.${format}`);
+    const response = await fetch(`https://xingri.github.io/api-tests/mic-audio/stereo-test.${format}`);
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
     const bufferSource = ctx.createBufferSource();
