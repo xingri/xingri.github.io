@@ -2,21 +2,21 @@
 
 | |
 |---|
-| **Authors** | Matt Reynolds (Google), Sun Shin (NVIDIA |
-| **Contacts** | mattreynolds@google.com, sushin@nvidia.com |
+| **Authors** | Matt Reynolds (Google), Marcos Cáceres(Apple), Sun Shin (NVIDIA) |
+| **Contacts** | mattreynolds@google.com, caceres_m@apple.com, sushin@nvidia.com |
 | **Status** | Explainer |
-| **Chromium Review** | https://crrev.com/c/7760763 |
 | **Chromium Bug** | https://issues.chromium.org/issues/339841686 |
 | **ChromeStatus** | https://chromestatus.com/feature/5075054393163776 |
-| **Specification Proposal** | https://pr-preview.s3.amazonaws.com/xingri/gamepad/pull/196.html#gamepadbuttontype-enum |
+| **WebKit Bug** | https://bugs.webkit.org/show_bug.cgi?id=266293 |
+| **Specification Proposal** | https://github.com/w3c/gamepad/pull/196 |
 
 ## Introduction
 
 This proposal extends the Gamepad API by introducing a new `type` attribute on `GamepadButton`.
 
-The attribute enables web applications to identify specialized gamepad buttons that may require unique handling. The initial use case is identifying controller touchpad buttons through a standardized mechanism.
+The attribute enables web applications to identify whether a button is part of the Standard Gamepad mapping, represents a controller-specific extension, or corresponds to a trackpad input.
 
-This proposal is intentionally minimal in scope. The initial specification defines a `trackpad` button type while establishing an extensible framework that may support additional button classifications in the future if compelling web developer use cases emerge.
+The primary motivation for this proposal is improving support for controller touchpads through a standardized and interoperable mechanism. At the same time, the proposed enumeration provides useful classification information for existing and future controller inputs.
 
 The proposal is fully backward compatible with existing Gamepad API implementations.
 
@@ -37,41 +37,71 @@ Specification status:
 
 > Specification currently under development in a Working Group.
 
+## Implementation Status
+
+### Chromium
+
+Implementation is under review in Chromium:
+
+- Chromium Review: https://crrev.com/c/7760763
+
+### WebKit
+
+WebKit has active implementation work for the same proposal:
+
+- WebKit Pull Request: https://github.com/WebKit/WebKit/pull/65693
+
+The existence of implementation efforts across multiple browser engines helps validate the usefulness and interoperability of the proposed API.
+
 ## Background
 
 The Gamepad API currently exposes button state through `GamepadButton` objects, including whether a button is pressed, touched, and its analog value.
 
-However, the API does not provide information describing the functional role of a button.
+However, applications do not have access to information describing the role of a button within a controller mapping.
 
-Modern game controllers increasingly include specialized input mechanisms. One example is the integrated touchpad found on several controllers. Applications that wish to identify touchpad buttons today typically rely on controller-specific button mappings and device-specific heuristics.
+Applications frequently need to determine whether a button is part of the Standard Gamepad mapping or represents a controller-specific extension. In addition, modern controllers increasingly expose specialized inputs such as touchpads that developers may wish to identify explicitly.
 
-This approach can be difficult to maintain and may not generalize across different controllers.
+Today, these distinctions generally require controller-specific button index mappings and custom application logic.
 
 ## Motivation
 
-Cloud gaming services, browser-based games, accessibility tools, and other controller-aware web applications often need to distinguish touchpad buttons from conventional gamepad buttons.
+The Gamepad API exposes button state through `GamepadButton` objects, but it does not provide information about the role of a button within a controller's mapping.
 
-Example use cases include:
+Applications frequently need to determine whether a button is part of the Standard Gamepad mapping or represents a controller-specific extension.
 
-- Displaying touchpad-specific prompts and tutorials.
-- Supporting touchpad interactions in browser-based games.
-- Providing accessibility descriptions that accurately reflect controller inputs.
-- Enabling controller-aware user interfaces.
+Examples include:
 
-Today, these scenarios generally require controller-specific mapping logic.
+- Cloud gaming services displaying controller-specific prompts.
+- Browser-based games adapting to controller capabilities.
+- Accessibility software providing meaningful descriptions of controller inputs.
+- Applications identifying touchpad inputs available on controllers such as DualShock and DualSense devices.
 
-By exposing touchpad button information directly through the Gamepad API, applications can identify these buttons in a standardized and interoperable manner.
+Today, web applications typically rely on controller-specific button indices and custom mapping logic to make these distinctions.
+
+By exposing button type information directly through the Gamepad API, applications can identify standard buttons, non-standard buttons, and touchpad buttons using a consistent and interoperable mechanism.
+
+### Trackpad Use Case
+
+Several game controllers expose integrated touchpads that are used by games as distinct input mechanisms.
+
+For example, cloud gaming services may wish to display prompts such as:
+
+> Press the touchpad.
+
+Without explicit button classification information, applications must rely on controller-specific button indices and mapping tables to identify these controls.
+
+Providing a dedicated `trackpad` button type allows applications to recognize this functionality directly through the platform.
 
 ## Goals
 
 This proposal aims to:
 
-- Expose touchpad button information through the Gamepad API.
-- Reduce reliance on controller-specific mapping logic.
-- Improve interoperability across different controllers.
-- Enable richer controller-aware user experiences.
+- Expose button type information through the Gamepad API.
+- Allow applications to distinguish standard and non-standard buttons.
+- Provide a standardized mechanism for identifying trackpad buttons.
+- Reduce reliance on controller-specific mapping tables.
+- Improve interoperability across different controller implementations.
 - Maintain compatibility with existing web content.
-- Establish a framework that can be extended in the future if additional standardized button classifications become necessary.
 
 ## Non-Goals
 
@@ -79,9 +109,9 @@ This proposal does not:
 
 - Expose controller model identifiers.
 - Expose manufacturer-specific information.
-- Change the existing Gamepad API mapping behavior.
+- Change existing Gamepad API mapping behavior.
 - Introduce controller remapping functionality.
-- Define additional button classifications beyond those required by the current use case.
+- Expose vendor-specific button names.
 
 ## Proposed API
 
@@ -91,8 +121,9 @@ The proposal adds a new readonly `type` attribute to `GamepadButton`.
 
 ```webidl
 enum GamepadButtonType {
-  "",
-  "trackpad"
+  "non-standard",
+  "standard",
+  "trackpad",
 };
 
 partial interface GamepadButton {
@@ -100,18 +131,23 @@ partial interface GamepadButton {
 };
 ```
 
-### Enumeration Values
+## Enumeration Values
 
 | Value | Description |
 |---------|-------------|
-| `""` | No specific button type information is available |
-| `"trackpad"` | The button is associated with a controller touchpad |
+| `standard` | Represents a button whose type is defined by the Standard Gamepad mapping. |
+| `non-standard` | Represents a button that exists on the controller but does not have a corresponding standard button type. |
+| `trackpad` | Represents a trackpad input type. |
 
-Applications should gracefully handle unknown values to allow future extensions.
+### Classification Model
+
+Trackpad inputs are represented as a dedicated button classification because they have known cross-device semantics and existing web developer use cases.
+
+In contrast, `non-standard` is intended for controller-specific buttons that do not correspond to a standardized button type.
 
 ## Examples
 
-### Detecting a Trackpad Button
+### Detecting Trackpad Buttons
 
 ```javascript
 const gamepad = navigator.getGamepads()[0];
@@ -123,7 +159,7 @@ for (const button of gamepad.buttons) {
 }
 ```
 
-### Cloud Gaming User Interface
+### Displaying Touchpad Prompts
 
 ```javascript
 if (button.type === "trackpad") {
@@ -131,25 +167,39 @@ if (button.type === "trackpad") {
 }
 ```
 
-### Accessibility Support
+### Detecting Controller-Specific Buttons
 
 ```javascript
-if (button.type === "trackpad") {
-  announce("Touchpad button");
+for (const button of gamepad.buttons) {
+  if (button.type === "non-standard") {
+    console.log("Controller-specific button");
+  }
 }
 ```
 
-## Future Extensibility
+### Processing Standard Buttons
 
-A dedicated `type` attribute was chosen instead of a specialized boolean attribute such as `isTrackpadButton`.
+```javascript
+const standardButtons = gamepad.buttons.filter(
+  button => button.type === "standard"
+);
+```
 
-This design allows future button classifications to be introduced through the standards process if additional web platform requirements are identified.
+## Future Evolution
 
-No additional button types are proposed as part of this effort.
+The current proposal introduces three button classifications:
+
+- `standard`
+- `non-standard`
+- `trackpad`
+
+These classifications address current web developer needs while providing a structured mechanism for future evolution.
+
+Any future additions would require separate specification review and Working Group consensus.
 
 ## Privacy Considerations
 
-This proposal exposes limited information about controller input capabilities that are already observable through controller behavior and existing mappings.
+This proposal exposes limited information about controller input classifications that are already observable through controller behavior and existing mappings.
 
 The proposal does not expose:
 
@@ -158,7 +208,7 @@ The proposal does not expose:
 - Manufacturer information
 - User-specific information
 
-The expected additional fingerprinting surface is minimal.
+The additional fingerprinting surface is expected to be minimal.
 
 ## Security Considerations
 
@@ -182,32 +232,7 @@ if ("type" in GamepadButton.prototype) {
 }
 ```
 
-## Alternatives Considered
-
-### Controller-Specific Mapping Logic
-
-Applications may continue maintaining custom controller mappings.
-
-However, this approach:
-
-- Requires ongoing maintenance.
-- Introduces device-specific complexity.
-- Scales poorly as new controllers are introduced.
-
-### Dedicated Touchpad Attribute
-
-A dedicated attribute such as:
-
-```webidl
-readonly attribute boolean isTrackpadButton;
-```
-
-was considered.
-
-An extensible `type` attribute provides a more flexible foundation for future evolution while satisfying the immediate touchpad use case.
-
 ## References
 
 - W3C Gamepad API: https://w3c.github.io/gamepad/
 - Specification Proposal: https://pr-preview.s3.amazonaws.com/xingri/gamepad/pull/196.html#gamepadbuttontype-enum
-- Chromium Review: https://crrev.com/c/7760763
