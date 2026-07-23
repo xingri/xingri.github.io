@@ -1,7 +1,7 @@
 # Gamepad Button Type
 
-| |
-|---|
+| Attribute | Detail |
+| :--- | :--- |
 | **Authors** | Matt Reynolds (Google), Marcos Cáceres(Apple), Sun Shin (NVIDIA) |
 | **Contacts** | mattreynolds@google.com, caceres_m@apple.com, sushin@nvidia.com |
 | **Status** | Explainer |
