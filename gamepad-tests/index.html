@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gamepad Tester</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --muted: #8b949e;
+      --text: #f0f6fc;
+      --accent: #58a6ff;
+      --pressed: #3fb950;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      align-items: center;
+      background: var(--page);
+      color: var(--text);
+      display: flex;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      justify-content: center;
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    main { max-width: 720px; width: 100%; }
+    header { margin-bottom: 24px; text-align: center; }
+    h1 { font-size: 1.5rem; letter-spacing: -.02em; margin: 0 0 8px; }
+    #status { color: var(--muted); font-size: .95rem; margin: 0; }
+
+    .tester {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: grid;
+      gap: 28px;
+      padding: 28px;
+    }
+
+    .sticks { display: grid; gap: 28px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stick { text-align: center; }
+    .label { color: var(--muted); display: block; font-size: .8rem; font-weight: 700; letter-spacing: .09em; margin-bottom: 12px; text-transform: uppercase; }
+    .pad {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      height: min(220px, 28vw);
+      margin: auto;
+      max-height: 220px;
+      max-width: 220px;
+      min-height: 150px;
+      min-width: 150px;
+      position: relative;
+      width: 100%;
+    }
+    .pad::before, .pad::after { background: var(--border); content: ""; left: 50%; position: absolute; top: 50%; transform: translate(-50%, -50%); }
+    .pad::before { height: 1px; width: 100%; }
+    .pad::after { height: 100%; width: 1px; }
+    .knob {
+      background: var(--accent);
+      border: 3px solid #b6dcff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 5px rgb(88 166 255 / 15%);
+      height: 24px;
+      left: calc(50% - 12px);
+      position: absolute;
+      top: calc(50% - 12px);
+      transition: transform 40ms linear;
+      width: 24px;
+      z-index: 1;
+    }
+    .coordinates { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .84rem; margin: 12px 0 0; }
+
+    .buttons { border-top: 1px solid var(--border); padding-top: 24px; }
+    .button-grid { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); }
+    .button {
+      align-items: center;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      font-size: .78rem;
+      font-weight: 700;
+      gap: 6px;
+      justify-content: center;
+      min-height: 76px;
+      transition: background 80ms, border-color 80ms, color 80ms, transform 80ms;
+    }
+    .button strong { color: var(--text); font-size: 1.1rem; }
+    .button.pressed { background: rgb(63 185 80 / 18%); border-color: var(--pressed); color: #7ee787; transform: translateY(1px); }
+    .button.pressed strong { color: #7ee787; }
+    .featured-buttons {
+      background: rgb(88 166 255 / 8%);
+      border: 1px solid rgb(88 166 255 / 45%);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .featured-buttons .label { color: #b6dcff; }
+    .featured-buttons .button { border-color: rgb(88 166 255 / 55%); }
+    .standard-layout { margin-top: 24px; }
+    .controller-layout {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1fr auto 1fr;
+      grid-template-areas: "dpad center face" "sticks center face";
+      padding: 4px 0;
+    }
+    .control-group { display: grid; gap: 10px; }
+    .control-group .label { grid-column: 1 / -1; margin: 0; text-align: center; }
+    .dpad { grid-area: dpad; grid-template-columns: repeat(3, 1fr); }
+    .dpad .button:nth-of-type(1) { grid-column: 2; grid-row: 2; }
+    .dpad .button:nth-of-type(2) { grid-column: 2; grid-row: 4; }
+    .dpad .button:nth-of-type(3) { grid-column: 1; grid-row: 3; }
+    .dpad .button:nth-of-type(4) { grid-column: 3; grid-row: 3; }
+    .face { grid-area: face; grid-template-columns: repeat(3, 1fr); }
+    .face .button:nth-of-type(1) { grid-column: 2; grid-row: 2; }
+    .face .button:nth-of-type(2) { grid-column: 3; grid-row: 3; }
+    .face .button:nth-of-type(3) { grid-column: 1; grid-row: 3; }
+    .face .button:nth-of-type(4) { grid-column: 2; grid-row: 4; }
+    .center-controls { align-content: center; grid-area: center; grid-template-columns: repeat(2, minmax(72px, 1fr)); }
+    .center-controls .button:last-child { grid-column: 1 / -1; }
+    .stick-buttons { grid-area: sticks; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .button small { color: var(--muted); font-size: .68rem; font-weight: 600; line-height: 1.1; text-align: center; }
+    .button.pressed small { color: #7ee787; }
+
+    @media (max-width: 480px) {
+      body { padding: 16px; }
+      .tester { gap: 22px; padding: 20px; }
+      .sticks { gap: 16px; }
+      .pad { min-height: 130px; min-width: 130px; }
+      .controller-layout { gap: 12px; grid-template-columns: 1fr 1fr; grid-template-areas: "dpad face" "center center" "sticks sticks"; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Gamepad Tester</h1>
+      <p id="status">Connect a controller and press any button.</p>
+    </header>
+    <section class="tester" aria-label="Gamepad input tester">
+      <div class="sticks">
+        <article class="stick">
+          <span class="label">L Stick</span>
+          <div class="pad" aria-label="Left stick position"><i class="knob" id="left-knob"></i></div>
+          <p class="coordinates" id="left-values">X: 0.00 &nbsp; Y: 0.00</p>
+        </article>
+        <article class="stick">
+          <span class="label">R Stick</span>
+          <div class="pad" aria-label="Right stick position"><i class="knob" id="right-knob"></i></div>
+          <p class="coordinates" id="right-values">X: 0.00 &nbsp; Y: 0.00</p>
+        </article>
+      </div>
+      <section class="buttons" aria-label="Standard gamepad buttons">
+        <div class="featured-buttons" aria-label="Highlighted front buttons 4 through 7">
+          <span class="label">Highlighted front buttons</span>
+          <div class="button-grid">
+            <div class="button" id="button-4"><strong>B4</strong><small>Left bumper</small><span>0%</span></div>
+            <div class="button" id="button-5"><strong>B5</strong><small>Right bumper</small><span>0%</span></div>
+            <div class="button" id="button-6"><strong>B6</strong><small>Left trigger</small><span>0%</span></div>
+            <div class="button" id="button-7"><strong>B7</strong><small>Right trigger</small><span>0%</span></div>
+          </div>
+        </div>
+        <div class="standard-layout" aria-label="Other standard gamepad buttons">
+          <span class="label">Other standard buttons</span>
+          <div class="controller-layout">
+            <div class="control-group dpad">
+              <span class="label">D-pad</span>
+              <div class="button" id="button-12"><strong>B12</strong><small>Up</small><span>0%</span></div>
+              <div class="button" id="button-13"><strong>B13</strong><small>Down</small><span>0%</span></div>
+              <div class="button" id="button-14"><strong>B14</strong><small>Left</small><span>0%</span></div>
+              <div class="button" id="button-15"><strong>B15</strong><small>Right</small><span>0%</span></div>
+            </div>
+            <div class="control-group center-controls">
+              <span class="label">Center</span>
+              <div class="button" id="button-8"><strong>B8</strong><small>Back / Select</small><span>0%</span></div>
+              <div class="button" id="button-9"><strong>B9</strong><small>Start</small><span>0%</span></div>
+              <div class="button" id="button-16"><strong>B16</strong><small>Center</small><span>0%</span></div>
+            </div>
+            <div class="control-group face">
+              <span class="label">Face buttons</span>
+              <div class="button" id="button-3"><strong>B3</strong><small>Top</small><span>0%</span></div>
+              <div class="button" id="button-1"><strong>B1</strong><small>Right</small><span>0%</span></div>
+              <div class="button" id="button-2"><strong>B2</strong><small>Left</small><span>0%</span></div>
+              <div class="button" id="button-0"><strong>B0</strong><small>Bottom</small><span>0%</span></div>
+            </div>
+            <div class="control-group stick-buttons">
+              <div class="button" id="button-10"><strong>B10</strong><small>Left stick press</small><span>0%</span></div>
+              <div class="button" id="button-11"><strong>B11</strong><small>Right stick press</small><span>0%</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script>
+    const status = document.querySelector('#status');
+    const axes = [
+      { knob: document.querySelector('#left-knob'), values: document.querySelector('#left-values'), x: 0, y: 1 },
+      { knob: document.querySelector('#right-knob'), values: document.querySelector('#right-values'), x: 2, y: 3 }
+    ];
+    const CAPTURE_INTERVAL_MS = 5;
+    let latestInput = null;
+
+    const clamp = value => Math.max(-1, Math.min(1, value || 0));
+    const format = value => clamp(value).toFixed(2);
+
+    function captureInput() {
+      const gamepad = [...navigator.getGamepads()].find(Boolean);
+      if (!gamepad) {
+        latestInput = null;
+        return;
+      }
+
+      // Copy values so this is a discrete 5 ms input sample, rather than a
+      // reference to the browser's mutable Gamepad object.
+      latestInput = {
+        id: gamepad.id,
+        axes: [...gamepad.axes],
+        buttons: gamepad.buttons.map(({ pressed, value }) => ({ pressed, value }))
+      };
+    }
+
+    function render() {
+      if (!latestInput) {
+        status.textContent = 'Connect a controller and press any button.';
+        requestAnimationFrame(render);
+        return;
+      }
+
+      status.textContent = `Connected: ${latestInput.id}`;
+      axes.forEach(({ knob, values, x, y }) => {
+        const horizontal = clamp(latestInput.axes[x]);
+        const vertical = clamp(latestInput.axes[y]);
+        knob.style.transform = `translate(${horizontal * 430}%, ${vertical * 430}%)`;
+        values.textContent = `X: ${format(horizontal)}   Y: ${format(vertical)}`;
+      });
+
+      for (let index = 0; index <= 16; index++) {
+        const input = latestInput.buttons[index] || { pressed: false, value: 0 };
+        const element = document.querySelector(`#button-${index}`);
+        element.classList.toggle('pressed', input.pressed || input.value > .5);
+        element.querySelector('span').textContent = `${Math.round(input.value * 100)}%`;
+      }
+      requestAnimationFrame(render);
+    }
+
+    captureInput();
+    setInterval(captureInput, CAPTURE_INTERVAL_MS);
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
