@@ -260,7 +260,7 @@ are cross-browser use cases.
 
 ### Chromium status and open implementation gap
 
-[Chromium's latest repository](https://source.chromium.org/chromium/chromium/src) on 2026-08-08. already contains the simulated backend and extensive
+[Chromium's latest repository](https://source.chromium.org/chromium/chromium/src) on 2026-08-08 already contains the simulated backend and extensive
 device-level unit coverage for simulated gamepads. Chromium's legacy Blink web
 tests also exercise a separate `window.gamepadController` test API. However,
 the inspected source has no ChromeDriver or DevTools automation command that
