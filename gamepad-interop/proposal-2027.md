@@ -6,7 +6,7 @@ Add a `test_driver.gamepad` API that lets automated Web Platform Tests create,
 update, and remove virtual Gamepad API devices. The API is a test-only control
 surface: it does not add web-exposed Gamepad API behavior.
 
-The proposed initial WebKit implementation uses classic WebDriver vendor
+The proposed initial implementation uses classic WebDriver vendor
 commands. It does **not** require WebDriver BiDi.
 
 > Status: the WebKit and Chromium gamepad endpoints in this document are
@@ -180,7 +180,8 @@ to them directly; the WebKit `wptrunner` protocol part does.
 
 ## WebKit implementation boundaries
 
-The classic WebDriver server is not the browser UI process. Therefore the
+Based on [WebKit's latest repository](https://github.com/webKit/webkit) on 2026-08-08,
+the classic WebDriver server is not the browser UI process. Therefore the
 WebDriver endpoint must forward commands through WebKit Automation to the UI
 process, which owns the gamepad provider.
 
