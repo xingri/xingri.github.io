@@ -27,7 +27,7 @@ haptics.
 
 ## Current WPT gamepad coverage
 
-This snapshot is from the `gamepad/` directory in `wpt<https://github.com/web-platform-tests/wpt>` 
+This snapshot is from the `gamepad/` directory in [Web Platform Tests (WPT)](https://github.com/web-platform-tests/wpt) 
 on 2026-08-08. It counts source files, not individual `testharness.js` assertions.
 
 | Area | Current status |
