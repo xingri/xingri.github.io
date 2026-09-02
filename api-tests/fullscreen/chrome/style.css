@@ -1,0 +1,18 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0; min-height: 100vh; background: Canvas; color: CanvasText; }
+main { box-sizing: border-box; max-width: 760px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+nav a { color: LinkText; }
+nav a[aria-current="page"] { font-weight: 700; text-decoration-thickness: .2em; }
+h1 { margin: 0; }
+h1 small { font-size: .45em; font-weight: 500; opacity: .65; }
+h2 { font-size: 1.1rem; margin-top: 0; }
+.intro { line-height: 1.5; }
+.panel, .lock-area { border: 1px solid color-mix(in srgb, CanvasText 35%, transparent); border-radius: .75rem; margin-top: 1rem; padding: 1.25rem; }
+button { cursor: pointer; font: inherit; margin: .25rem .5rem .25rem 0; padding: .55rem .85rem; }
+button:disabled { cursor: not-allowed; opacity: .6; }
+kbd, code { border-radius: .25rem; background: color-mix(in srgb, CanvasText 12%, transparent); padding: .1rem .3rem; }
+#event-log { display: block; min-height: 1.5rem; overflow-wrap: anywhere; }
+.lock-area { align-items: center; cursor: crosshair; display: flex; flex-direction: column; font-size: 1.2rem; gap: 1rem; justify-content: center; min-height: 280px; text-align: center; user-select: none; }
+.lock-area.locked { border-color: Highlight; box-shadow: 0 0 0 3px color-mix(in srgb, Highlight 30%, transparent); }
+.hint { color: color-mix(in srgb, CanvasText 70%, transparent); font-size: .9rem; }

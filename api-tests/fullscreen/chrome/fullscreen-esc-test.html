@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // Keyboard Lock is available only in a secure context. Localhost is already
+    // treated as secure by Chromium, but non-local HTTP test servers are not.
+    if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      location.protocol = 'https:';
+    }
+  </script>
+  <title>Keyboard and Pointer Lock Test</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    window.keyboardLockActive = false;
+    document.addEventListener('keydown', (event) => {
+      if (window.keyboardLockActive) event.preventDefault();
+    });
+  </script>
+  <script src="keyboard-lock.js" defer></script>
+</head>
+<body>
+  <main>
+    <nav aria-label="Test pages"></nav>
+    <h1>Keyboard and Pointer Lock Test <small>v2</small></h1>
+    <p class="intro">Use this page to verify Chromium's Keyboard Lock and Pointer Lock APIs together. Keyboard lock requires fullscreen mode.</p>
+    <section class="panel">
+      <button id="fullscreen" type="button">Enter fullscreen</button>
+      <button id="lock-both" type="button" disabled>Lock keyboard and pointer</button>
+      <button id="keyboard" type="button" disabled>Lock keyboard only</button>
+      <button id="unlock" type="button" disabled>Unlock keyboard</button>
+      <p id="status" role="status">Waiting to enter fullscreen.</p>
+    </section>
+    <section class="panel" aria-labelledby="keys-heading">
+      <h2 id="keys-heading">What this tests</h2>
+      <p>Use “Lock keyboard only” to test keyboard lock without pointer lock. After locking, try <kbd>Ctrl</kbd>+<kbd>T</kbd>, <kbd>Ctrl</kbd>+<kbd>N</kbd>, or <kbd>Esc</kbd>. On macOS, use <kbd>Command</kbd> instead of <kbd>Ctrl</kbd>. Hold <kbd>Esc</kbd> for about two seconds to leave fullscreen.</p>
+      <p>While locked, this page calls <code>event.preventDefault()</code> for every captured <code>keydown</code> event.</p>
+    </section>
+    <section class="panel" aria-labelledby="events-heading">
+      <h2 id="events-heading">Captured keys</h2>
+      <output id="event-log" aria-live="polite">No keys captured yet.</output>
+    </section>
+    <section class="panel" aria-labelledby="pointer-heading">
+      <h2 id="pointer-heading">Pointer lock</h2>
+      <p>Use “Lock keyboard and pointer” above to request both locks together, or click the area to test pointer lock alone. Move the mouse to measure relative movement; press <kbd>Esc</kbd> to release it.</p>
+      <div id="lock-area" class="lock-area" tabindex="0" aria-label="Pointer lock test area"><span>Click here to lock the pointer</span><output id="coordinates" aria-live="polite">Movement: x 0, y 0</output></div>
+      <p id="pointer-status" role="status">Pointer is not locked.</p>
+      <button id="release" type="button" disabled>Release pointer</button>
+    </section>
+  </main>
+</body>
+</html>
