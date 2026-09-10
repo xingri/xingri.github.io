@@ -79,8 +79,8 @@ const name = await test_driver.gamepad.connect({
   mapping: "standard",
   axes: [{minimum: -1, maximum: 1}, {minimum: -1, maximum: 1}],
   buttons: [
-    {minimum: 0, maximum: 1, type: "standard"},
-    {minimum: 0, maximum: 1, type: "trackpad"},
+    {minimum: 0, maximum: 1},
+    {minimum: 0, maximum: 1},
   ],
   surfaces: [],
   vibration: [],
@@ -111,16 +111,17 @@ action before observing the device.
 | `mapping` | `""`, `"standard"`, or `"xr-standard"` | `""` | Gamepad `mapping` |
 | `context` | `WindowProxy` or browsing-context id | current context | Context to which the simulated device is scoped |
 | `axes` | array of logical axis-bound records | `[]` | One record for each axis |
-| `buttons` | array of logical button-bound/type records | `[]` | One record for each button |
+| `buttons` | array of logical button-bound records | `[]` | One record for each button; `type` is an optional experimental classification field. |
 | `surfaces` | array of touch-surface records | `[]` | Supported touch surfaces |
 | `vibration` | array of vibration-effect types | `[]` | Supported actuator effects |
 
-The axis, button, surface, and vibration records use the same logical bounds,
-button types, surface descriptions, and effect-type vocabulary as the browser's
-simulated-gamepad parameters (for example, Chromium's
-`device::SimulatedGamepadParams`). The WPT specification will define
-transport-neutral dictionaries; browsers must not expose their parameter object
-to test code.
+The axis, button, surface, and vibration records use transport-neutral
+dictionaries aligned with the browser's simulated-gamepad parameters (for
+example, Chromium's `device::SimulatedGamepadParams`); browsers must not expose
+their parameter object to test code. A button's required members describe its
+logical bounds. Its `type` member is optional and is reserved for the proposed
+`GamepadButton.type` API; it is not required for ordinary virtual-gamepad
+tests.
 
 ### Gamepad Actions input source
 
@@ -144,7 +145,7 @@ touch identifier exposed by the Gamepad API. `value` is a logical, unnormalized
 input value, validated against the bounds advertised by `connect()`.
 
 When `pressed` or `touched` is `null` or omitted, the implementation derives
-that state according to the simulated device's button type and value. When it
+that state according to the simulated device's button model and value. When it
 is supplied, the implementation must use the supplied boolean independently;
 this supports devices with distinct pressure, touch, and press sensors.
 
@@ -164,17 +165,21 @@ rejects the promise.
 
 ### `GamepadButton.type` coverage
 
-The virtual-device description is also the required test hook for the proposed
-[`GamepadButton.type` API](https://xingri.github.io/gamepad-button-type/). A
-button record's `type` is one of `"standard"`, `"non-standard"`, or
-`"trackpad"`; the browser exposes that value through the read-only
-`GamepadButton.type` attribute. This makes it possible to test the API without
-depending on a physical controller or controller-specific button indices.
+When a user agent supports the proposed
+[`GamepadButton.type` API](https://xingri.github.io/gamepad-button-type/), a
+button record may additionally specify `type` as `"standard"`,
+`"non-standard"`, or `"trackpad"`. The browser exposes that requested value
+through the read-only `GamepadButton.type` attribute. This optional test hook
+makes it possible to test the API without depending on a physical controller
+or controller-specific button indices.
 
 `GamepadButton.type` is not yet fully standardized. Its WPTs must therefore be
-tentative and test the feature only when the user agent implements it. They
-must not make unrelated virtual-gamepad tests fail in browsers that do not yet
-support the API:
+tentative and test the feature only when the user agent implements it. A
+`connect()` request without a button `type` must remain supported everywhere
+that implements the virtual-gamepad API. A request with button `type` is made
+only after the feature guard below; it may reject as unsupported in a browser
+without this experimental capability. Neither case must make unrelated
+virtual-gamepad tests fail:
 
 ```js
 const supportsButtonType =
@@ -358,7 +363,7 @@ test_driver.gamepad.connect/disconnect or Actions.send()
 | `mapping` | `SimulatedGamepadParams::mapping` |
 | `context` | Browser automation bridge's browsing-context scope |
 | `axes` | `SimulatedGamepadParams::axis_bounds` |
-| `buttons` | `SimulatedGamepadParams::button_bounds` and `button_types` |
+| `buttons` | `SimulatedGamepadParams::button_bounds`; map `button_types` only when the optional `GamepadButton.type` field is supplied and supported |
 | `surfaces` | `SimulatedGamepadParams` touch-surface descriptions |
 | `vibration` | `SimulatedGamepadParams::vibration` |
 | axis/button/touch action | Corresponding `GamepadService` simulation call |
@@ -513,9 +518,9 @@ The first automated test should verify:
 2. Gamepad Actions input makes the device observable as required by the
    Gamepad API and exposes requested axis and button values, including explicit
    `pressed`/`touched` states.
-3. `GamepadButton.type` exposes `"standard"`, `"non-standard"`, and
-   `"trackpad"` from the virtual-device button description and remains stable
-   while input state changes.
+3. In a tentative, feature-gated test, `GamepadButton.type` exposes
+   `"standard"`, `"non-standard"`, and `"trackpad"` from the optional
+   virtual-device button description and remains stable while input changes.
 4. `disconnect()` dispatches `gamepaddisconnected` and removes the device.
 5. A subsequent test session begins without the previous session's gamepad.
 
@@ -523,8 +528,9 @@ The first automated test should verify:
 
 1. Is `test_driver.gamepad` the desired public namespace, or should this be a
    more general virtual-input namespace?
-2. Are the proposed WPT dictionary shapes for bounds, button types, touch
-   surfaces, and vibration effects sufficiently aligned with each backend?
+2. Are the proposed WPT dictionary shapes for bounds, optional button-type
+   classification, touch surfaces, and vibration effects sufficiently aligned
+   with each backend?
 3. Are `gamepad` Actions items the right extension point for device input and
    cross-source tick ordering?
 4. Is current-context scoping the right default, with an optional explicit
