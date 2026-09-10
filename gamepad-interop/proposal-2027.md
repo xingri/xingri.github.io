@@ -79,8 +79,8 @@ const name = await test_driver.gamepad.connect({
   mapping: "standard",
   axes: [{minimum: -1, maximum: 1}, {minimum: -1, maximum: 1}],
   buttons: [
-    {minimum: 0, maximum: 1, type: "button"},
-    {minimum: 0, maximum: 1, type: "button"},
+    {minimum: 0, maximum: 1, type: "standard"},
+    {minimum: 0, maximum: 1, type: "trackpad"},
   ],
   surfaces: [],
   vibration: [],
@@ -161,6 +161,77 @@ about `gamepaddisconnected` registers its listener before this call.
 
 Calling an operation with an unknown, disconnected, or already-cleaned-up name
 rejects the promise.
+
+### `GamepadButton.type` coverage
+
+The virtual-device description is also the required test hook for the proposed
+[`GamepadButton.type` API](https://xingri.github.io/gamepad-button-type/). A
+button record's `type` is one of `"standard"`, `"non-standard"`, or
+`"trackpad"`; the browser exposes that value through the read-only
+`GamepadButton.type` attribute. This makes it possible to test the API without
+depending on a physical controller or controller-specific button indices.
+
+`GamepadButton.type` is not yet fully standardized. Its WPTs must therefore be
+tentative and test the feature only when the user agent implements it. They
+must not make unrelated virtual-gamepad tests fail in browsers that do not yet
+support the API:
+
+```js
+const supportsButtonType =
+  typeof GamepadButton !== "undefined" &&
+  "type" in GamepadButton.prototype;
+
+assert_implements_optional(
+  supportsButtonType,
+  "GamepadButton.type is implemented"
+);
+
+if (!supportsButtonType)
+  return;
+```
+
+After the guard, the test may create a typed virtual gamepad and assert the
+reported values. Once the API is standardized and the test is no longer
+optional, the guard can be removed and the test promoted from tentative to
+required coverage.
+
+```js
+const name = await test_driver.gamepad.connect({
+  id: "WPT button-type gamepad",
+  mapping: "standard",
+  buttons: [
+    {minimum: 0, maximum: 1, type: "standard"},
+    {minimum: 0, maximum: 1, type: "non-standard"},
+    {minimum: 0, maximum: 1, type: "trackpad"},
+  ],
+});
+
+await new test_driver.Actions()
+  .addGamepad(name)
+  .gamepadButtonInput(2, 1, {pressed: true, touched: true})
+  .send();
+
+const gamepad = await waitForGamepadWithId("WPT button-type gamepad");
+assert_equals(gamepad.buttons[0].type, "standard");
+assert_equals(gamepad.buttons[1].type, "non-standard");
+assert_equals(gamepad.buttons[2].type, "trackpad");
+assert_true(gamepad.buttons[2].pressed);
+assert_true(gamepad.buttons[2].touched);
+```
+
+The tentative WPT suite should include:
+
+1. An IDL-harness test for `GamepadButton.type` and the three
+   `GamepadButtonType` enum values.
+2. A virtual-gamepad test that exposes all three types in one device and
+   verifies that array order and values are preserved.
+3. A state-independence test showing that an input action changes `value`,
+   `pressed`, and `touched` without changing `type`.
+4. A `mapping: "standard"` test confirming that a simulated trackpad button
+   remains `"trackpad"` rather than being inferred from its array index.
+
+These tests belong with the button-type specification change, but depend on
+the virtual-gamepad facility proposed here for portable automated execution.
 
 ## WPT testdriver plumbing
 
@@ -442,8 +513,11 @@ The first automated test should verify:
 2. Gamepad Actions input makes the device observable as required by the
    Gamepad API and exposes requested axis and button values, including explicit
    `pressed`/`touched` states.
-3. `disconnect()` dispatches `gamepaddisconnected` and removes the device.
-4. A subsequent test session begins without the previous session's gamepad.
+3. `GamepadButton.type` exposes `"standard"`, `"non-standard"`, and
+   `"trackpad"` from the virtual-device button description and remains stable
+   while input state changes.
+4. `disconnect()` dispatches `gamepaddisconnected` and removes the device.
+5. A subsequent test session begins without the previous session's gamepad.
 
 ## Questions for discussion
 
