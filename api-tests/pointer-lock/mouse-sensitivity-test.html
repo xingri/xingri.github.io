@@ -607,6 +607,7 @@
                 };
 
                 const DIAGNOSTIC_PREFIX = "[PointerLockMouseTest]";
+                const ACTIVE_INTERVAL_LIMIT_MS = 100;
                 let diagnosticSequence = 0;
                 let diagnosticTimer = null;
                 let lastDiagnosticReport = null;
@@ -618,6 +619,7 @@
                         label,
                         startedAt: 0,
                         lockAtStart: false,
+                        lockTransitions: [],
                         streams: new Map()
                     };
                 }
@@ -641,6 +643,9 @@
                         intervalCount: 0,
                         minInterval: Infinity,
                         maxInterval: 0,
+                        activeIntervalSum: 0,
+                        activeIntervalCount: 0,
+                        longGaps: 0,
                         histogram: new Map()
                     };
                 }
@@ -650,7 +655,8 @@
                         return;
                     }
 
-                    const key = `${eventType}:${variant}`;
+                    const lockState = document.pointerLockElement === track ? "locked" : "unlocked";
+                    const key = `${lockState}:${eventType}:${variant}`;
                     let stream = diagnostic.streams.get(key);
                     if (!stream) {
                         stream = createStreamStats();
@@ -689,6 +695,12 @@
                                     stream.intervalCount += 1;
                                     stream.minInterval = Math.min(stream.minInterval, interval);
                                     stream.maxInterval = Math.max(stream.maxInterval, interval);
+                                    if (interval <= ACTIVE_INTERVAL_LIMIT_MS) {
+                                        stream.activeIntervalSum += interval;
+                                        stream.activeIntervalCount += 1;
+                                    } else {
+                                        stream.longGaps += 1;
+                                    }
                                 }
                             }
                             stream.lastTimestamp = timestamp;
@@ -730,6 +742,14 @@
                                     duration > 0
                                         ? roundDiagnostic(((stream.samples - 1) * 1000) / duration)
                                         : null,
+                                activeEstimatedHz:
+                                    stream.activeIntervalSum > 0
+                                        ? roundDiagnostic(
+                                              (stream.activeIntervalCount * 1000) /
+                                                  stream.activeIntervalSum
+                                          )
+                                        : null,
+                                longGaps: stream.longGaps,
                                 sumX: roundDiagnostic(stream.sumX),
                                 sumY: roundDiagnostic(stream.sumY),
                                 absX: roundDiagnostic(stream.absX),
@@ -766,6 +786,7 @@
                         elapsedMs: roundDiagnostic(performance.now() - diagnostic.startedAt),
                         pointerLockAtStart: diagnostic.lockAtStart,
                         pointerLockNow: document.pointerLockElement === track,
+                        lockTransitions: diagnostic.lockTransitions.slice(),
                         unadjustedRequested: unadjustedLockEl.checked,
                         unadjustedStatus,
                         userAgent: navigator.userAgent,
@@ -1261,6 +1282,12 @@
                         pendingUnadjustedRequest = null;
                     }
                     updateLockUi();
+                    if (diagnostic.active) {
+                        diagnostic.lockTransitions.push({
+                            elapsedMs: roundDiagnostic(performance.now() - diagnostic.startedAt),
+                            locked: document.pointerLockElement === track
+                        });
+                    }
                     console.log(`${DIAGNOSTIC_PREFIX} pointer lock changed`, {
                         locked: document.pointerLockElement === track,
                         unadjustedRequested: unadjustedLockEl.checked,
