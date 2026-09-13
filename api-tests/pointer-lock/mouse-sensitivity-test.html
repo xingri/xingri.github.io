@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Mouse / Pointer Coordinate Test</title>
+        <style>
+            :root {
+                --bg: #1a1d23;
+                --panel: #252a33;
+                --border: #3a4250;
+                --text: #e8eaed;
+                --muted: #9aa3b2;
+                --accent: #5b9fd4;
+                --accent-dim: #3d6f96;
+                --warn: #e0a04a;
+                --ok: #6bbf7a;
+                --err: #e07070;
+                --track: #12151a;
+                --mousemove: #7eb6ff;
+                --pointermove: #7ed9a8;
+                --pointerrawupdate: #e0b06a;
+                --coalesced: #d49be8;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                background: var(--bg);
+                color: var(--text);
+                font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+                font-size: 14px;
+                overflow: hidden;
+            }
+
+            #app {
+                display: grid;
+                grid-template-columns: 340px 1fr;
+                height: 100%;
+            }
+
+            #sidebar {
+                background: var(--panel);
+                border-right: 1px solid var(--border);
+                padding: 16px;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                z-index: 10;
+            }
+
+            h1 {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+            }
+
+            h2 {
+                margin: 0 0 8px;
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--muted);
+            }
+
+            .section {
+                border-top: 1px solid var(--border);
+                padding-top: 12px;
+            }
+
+            label.option {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                padding: 6px 0;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            label.option input {
+                margin-top: 2px;
+                accent-color: var(--accent);
+            }
+
+            label.option .desc {
+                display: block;
+                color: var(--muted);
+                font-size: 12px;
+                margin-top: 2px;
+            }
+
+            button {
+                appearance: none;
+                border: 1px solid var(--border);
+                background: #2e3542;
+                color: var(--text);
+                padding: 8px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font: inherit;
+            }
+
+            button:hover {
+                border-color: var(--accent);
+                background: #354054;
+            }
+
+            button.primary {
+                background: var(--accent-dim);
+                border-color: var(--accent);
+            }
+
+            button.primary:hover {
+                background: var(--accent);
+                color: #0d1117;
+            }
+
+            button:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            .row {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .status {
+                font-size: 12px;
+                color: var(--muted);
+                line-height: 1.5;
+            }
+
+            .status-block {
+                display: grid;
+                gap: 4px;
+                margin-top: 8px;
+                font-size: 12px;
+                color: var(--muted);
+                line-height: 1.45;
+            }
+
+            .status .on,
+            .status-block .on {
+                color: var(--ok);
+            }
+
+            .status .off,
+            .status-block .off {
+                color: var(--warn);
+            }
+
+            .status .err,
+            .status-block .err {
+                color: var(--err);
+            }
+
+            .instructions {
+                font-size: 12px;
+                color: var(--muted);
+                line-height: 1.55;
+            }
+
+            .instructions ol,
+            .instructions ul {
+                margin: 0;
+                padding-left: 18px;
+            }
+
+            .instructions li {
+                margin-bottom: 6px;
+            }
+
+            .instructions code {
+                background: #1a1d23;
+                padding: 1px 4px;
+                border-radius: 3px;
+                font-size: 11px;
+                color: #c5d0e0;
+            }
+
+            .legend {
+                display: grid;
+                gap: 6px;
+                font-size: 12px;
+            }
+
+            .legend-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .swatch {
+                width: 12px;
+                height: 12px;
+                border-radius: 2px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                flex-shrink: 0;
+            }
+
+            #track {
+                position: relative;
+                background:
+                    radial-gradient(circle at 1px 1px, #2a303a 1px, transparent 0) 0 0 / 24px 24px,
+                    var(--track);
+                cursor: crosshair;
+                overflow: hidden;
+                outline: none;
+            }
+
+            #track:focus {
+                box-shadow: inset 0 0 0 2px var(--accent-dim);
+            }
+
+            #track.hide-cursor {
+                cursor: none;
+            }
+
+            #hint {
+                position: absolute;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                pointer-events: none;
+                color: var(--muted);
+                font-size: 15px;
+                text-align: center;
+                padding: 24px;
+                transition: opacity 0.2s;
+            }
+
+            #hint.hidden {
+                opacity: 0;
+            }
+
+            .cursor-layer {
+                position: absolute;
+                left: 0;
+                top: 0;
+                pointer-events: none;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                will-change: transform;
+            }
+
+            .cursor-layer canvas {
+                display: block;
+                image-rendering: pixelated;
+            }
+
+            .cursor-layer .label {
+                margin-top: 2px;
+                padding: 1px 5px;
+                background: rgba(0, 0, 0, 0.78);
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                border-radius: 3px;
+                font-size: 9px;
+                font-family: "IBM Plex Mono", ui-monospace, monospace;
+                white-space: nowrap;
+                color: #dce3ee;
+                max-width: 160px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .cursor-layer.coalesced .label {
+                border-style: dashed;
+            }
+
+            #stats {
+                position: absolute;
+                right: 12px;
+                bottom: 12px;
+                background: rgba(0, 0, 0, 0.7);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                padding: 8px 10px;
+                font-family: "IBM Plex Mono", ui-monospace, monospace;
+                font-size: 11px;
+                line-height: 1.45;
+                color: var(--muted);
+                pointer-events: none;
+                max-width: 320px;
+            }
+
+            #stats strong {
+                color: var(--text);
+                font-weight: 500;
+            }
+
+            .badge {
+                display: inline-block;
+                padding: 1px 6px;
+                border-radius: 3px;
+                background: #1a1d23;
+                border: 1px solid var(--border);
+                font-size: 11px;
+                margin-left: 4px;
+            }
+
+            .badge.supported {
+                border-color: var(--ok);
+                color: var(--ok);
+            }
+
+            .badge.unsupported {
+                border-color: var(--warn);
+                color: var(--warn);
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app">
+            <aside id="sidebar">
+                <div>
+                    <h1>Mouse / Pointer Coordinate Test</h1>
+                    <p class="status" style="margin: 6px 0 0">
+                        Listens to all move event types at once. Spawns cursors for each event
+                        stream × coalesced/uncoalesced, driven by
+                        <code>movementX</code>/<code>movementY</code>.
+                    </p>
+                </div>
+
+                <div class="section">
+                    <h2>Instructions</h2>
+                    <div class="instructions">
+                        <ol>
+                            <li>
+                                Optionally enable <strong>unadjusted pointer lock</strong>, then
+                                click <strong>Enter pointer lock</strong> (Esc to exit). Check the
+                                status block for whether unadjusted movement was granted.
+                            </li>
+                            <li>
+                                <strong>Left-click</strong> the tracking area to spawn cursor
+                                canvases in columns (one stream per column) along the left.
+                            </li>
+                            <li>
+                                Move the mouse. Each cursor accumulates
+                                <code>movementX</code>/<code>movementY</code> from its event
+                                stream (raw vs coalesced).
+                            </li>
+                            <li>
+                                Solid labels = uncoalesced (the event as delivered). Dashed labels =
+                                expanded <code>getCoalescedEvents()</code>.
+                                <code>mousemove</code> has no coalesced stream.
+                            </li>
+                            <li>
+                                Click again to respawn at the left. Right-click (or Clear) removes
+                                cursors.
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Event streams</h2>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="swatch" style="background: var(--mousemove)"></span>
+                            mousemove
+                        </div>
+                        <div class="legend-item">
+                            <span class="swatch" style="background: var(--pointermove)"></span>
+                            pointermove
+                            <span id="pointerSupport" class="badge">…</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="swatch" style="background: var(--pointerrawupdate)"></span>
+                            pointerrawupdate
+                            <span id="rawSupport" class="badge">…</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="swatch" style="background: var(--coalesced)"></span>
+                            coalesced variant (dashed label)
+                            <span id="coalesceSupport" class="badge">…</span>
+                        </div>
+                    </div>
+                    <p class="status" style="margin: 8px 0 0">
+                        All supported streams are listened to simultaneously after spawn.
+                    </p>
+                </div>
+
+                <div class="section">
+                    <h2>Options</h2>
+                    <label class="option">
+                        <input type="checkbox" id="hideSystemCursor" />
+                        <span>
+                            Hide system cursor on track
+                            <span class="desc"
+                                >Off by default so you can compare drawn cursors to the real
+                                pointer. Pointer lock always hides it (browser behavior).</span
+                            >
+                        </span>
+                    </label>
+                </div>
+
+                <div class="section">
+                    <h2>Pointer lock</h2>
+                    <label class="option">
+                        <input type="checkbox" id="unadjustedLock" />
+                        <span>
+                            Request unadjusted movement
+                            <span class="desc"
+                                >Leave this off when evaluating system-style acceleration. When
+                                enabled, it passes <code>{ unadjustedMovement: true }</code> to
+                                <code>requestPointerLock</code>. If the browser rejects it, falls
+                                back to a normal lock. Android currently accepts this option but
+                                does not distinguish it from normal pointer lock.</span
+                            >
+                        </span>
+                    </label>
+                    <div class="row" style="margin-top: 4px">
+                        <button type="button" class="primary" id="lockBtn">Enter pointer lock</button>
+                        <button type="button" id="unlockBtn" disabled>Exit</button>
+                    </div>
+                    <div class="status-block" id="lockStatus">
+                        <div>Pointer lock: <span class="off">off</span></div>
+                        <div>Unadjusted movement: <span class="off">n/a</span></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Actions</h2>
+                    <div class="row">
+                        <button type="button" id="clearBtn">Clear cursors</button>
+                        <button type="button" id="resetStatsBtn">Reset stats</button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Diagnostics</h2>
+                    <label class="option">
+                        <input type="checkbox" id="periodicDiagnostics" />
+                        <span>
+                            Log summary every second
+                            <span class="desc"
+                                >Uses aggregate counters; it does not log individual mouse
+                                events.</span
+                            >
+                        </span>
+                    </label>
+                    <div class="row">
+                        <button type="button" class="primary" id="startCaptureBtn">
+                            Start capture (S)
+                        </button>
+                        <button type="button" id="stopCaptureBtn" disabled>
+                            Stop &amp; log (E)
+                        </button>
+                    </div>
+                    <div class="row" style="margin-top: 6px">
+                        <button type="button" id="copyCaptureBtn" disabled>Copy last JSON</button>
+                    </div>
+                    <div class="status-block" id="captureStatus">
+                        <div>Diagnostic capture: <span class="off">idle</span></div>
+                    </div>
+                    <p class="status" style="margin: 7px 0 0">
+                        While pointer-locked, press <strong>S</strong> to start/reset a trial and
+                        <strong>E</strong> to stop and print it. Console API:
+                        <code>pointerLockDiagnostics.start("label")</code> and
+                        <code>pointerLockDiagnostics.stop()</code>.
+                    </p>
+                </div>
+
+                <div class="section">
+                    <h2>Notes</h2>
+                    <div class="instructions">
+                        <ul>
+                            <li>
+                                Only relative <code>movementX</code>/<code>movementY</code> drive
+                                the cursors.
+                            </li>
+                            <li>
+                                Coalesced <code>movementX</code>/<code>movementY</code> semantics
+                                differ across browsers / versions (notably older Firefox).
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </aside>
+
+            <div id="track" class="idle" tabindex="0">
+                <div id="hint">Left-click to spawn coordinate cursors, then move the mouse</div>
+                <div id="stats">
+                    mousemove: <strong id="statMousemove">0</strong><br />
+                    pointermove: <strong id="statPointermove">0</strong> (coalesced samples:
+                    <strong id="statPointermoveCoal">0</strong>)<br />
+                    pointerrawupdate: <strong id="statRaw">0</strong> (coalesced samples:
+                    <strong id="statRawCoal">0</strong>)<br />
+                    last: <strong id="statType">—</strong><br />
+                    client: <strong id="statClient">—</strong><br />
+                    movement: <strong id="statMovement">—</strong>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                const CURSOR_SIZE = 28;
+                const STACK_GAP = 42;
+                const COL_GAP = 168;
+                const LEFT_MARGIN = 10;
+
+                const EVENT_STREAMS = [
+                    {
+                        type: "mousemove",
+                        color: "var(--mousemove)",
+                        supportsCoalesced: false
+                    },
+                    {
+                        type: "pointermove",
+                        color: "var(--pointermove)",
+                        supportsCoalesced: true
+                    },
+                    {
+                        type: "pointerrawupdate",
+                        color: "var(--pointerrawupdate)",
+                        supportsCoalesced: true
+                    }
+                ];
+
+                /** @type {{ id: string, label: string, mode: 'absolute' | 'relative', getX: (e: MouseEvent) => number, getY: (e: MouseEvent) => number }[]} */
+                const COORD_TRACKS = [
+                    {
+                        id: "movement",
+                        label: "movementX/Y",
+                        mode: "relative",
+                        getX: (e) => e.movementX,
+                        getY: (e) => e.movementY
+                    }
+                ];
+
+                const track = document.getElementById("track");
+                const hint = document.getElementById("hint");
+                const lockBtn = document.getElementById("lockBtn");
+                const unlockBtn = document.getElementById("unlockBtn");
+                const lockStatus = document.getElementById("lockStatus");
+                const unadjustedLockEl = document.getElementById("unadjustedLock");
+                const hideSystemCursorEl = document.getElementById("hideSystemCursor");
+                const clearBtn = document.getElementById("clearBtn");
+                const resetStatsBtn = document.getElementById("resetStatsBtn");
+                const periodicDiagnosticsEl = document.getElementById("periodicDiagnostics");
+                const startCaptureBtn = document.getElementById("startCaptureBtn");
+                const stopCaptureBtn = document.getElementById("stopCaptureBtn");
+                const copyCaptureBtn = document.getElementById("copyCaptureBtn");
+                const captureStatus = document.getElementById("captureStatus");
+
+                const supportsPointer =
+                    typeof PointerEvent !== "undefined" && "onpointermove" in window;
+                const supportsRawUpdate = "onpointerrawupdate" in window;
+                const supportsCoalesced =
+                    typeof PointerEvent !== "undefined" &&
+                    "getCoalescedEvents" in PointerEvent.prototype;
+
+                function setBadge(id, ok) {
+                    const el = document.getElementById(id);
+                    el.textContent = ok ? "supported" : "unsupported";
+                    el.classList.add(ok ? "supported" : "unsupported");
+                }
+
+                setBadge("pointerSupport", supportsPointer);
+                setBadge("rawSupport", supportsRawUpdate);
+                setBadge("coalesceSupport", supportsCoalesced);
+
+                /**
+                 * @typedef {{
+                 *   el: HTMLElement,
+                 *   def: typeof COORD_TRACKS[0],
+                 *   eventType: string,
+                 *   coalesced: boolean,
+                 *   x: number,
+                 *   y: number
+                 * }} Layer
+                 */
+
+                /** @type {Layer[]} */
+                let layers = [];
+                /** @type {Map<string, Layer[]>} key = `${eventType}:${coalesced}` */
+                let layerIndex = new Map();
+                /** @type {{ type: string, handler: EventListener, opts?: AddEventListenerOptions }[]} */
+                let attached = [];
+                let listening = false;
+
+                /** @type {'n/a' | 'on' | 'off' | 'unsupported' | 'failed'} */
+                let unadjustedStatus = "n/a";
+                /** Set while a lock request is in flight: true = asked for unadjusted, false = normal. */
+                let pendingUnadjustedRequest = null;
+                let lockActive = false;
+
+                let stats = {
+                    mousemove: 0,
+                    pointermove: 0,
+                    pointermoveCoal: 0,
+                    pointerrawupdate: 0,
+                    pointerrawupdateCoal: 0
+                };
+
+                const DIAGNOSTIC_PREFIX = "[PointerLockMouseTest]";
+                let diagnosticSequence = 0;
+                let diagnosticTimer = null;
+                let lastDiagnosticReport = null;
+                let diagnostic = createDiagnosticState();
+
+                function createDiagnosticState(label = "") {
+                    return {
+                        active: false,
+                        label,
+                        startedAt: 0,
+                        lockAtStart: false,
+                        streams: new Map()
+                    };
+                }
+
+                function createStreamStats() {
+                    return {
+                        eventBatches: 0,
+                        emptyBatches: 0,
+                        samples: 0,
+                        sumX: 0,
+                        sumY: 0,
+                        absX: 0,
+                        absY: 0,
+                        path: 0,
+                        maxAbsX: 0,
+                        maxAbsY: 0,
+                        zeroSamples: 0,
+                        firstTimestamp: null,
+                        lastTimestamp: null,
+                        intervalSum: 0,
+                        intervalCount: 0,
+                        minInterval: Infinity,
+                        maxInterval: 0,
+                        histogram: new Map()
+                    };
+                }
+
+                function recordDiagnosticSamples(eventType, variant, samples) {
+                    if (!diagnostic.active) {
+                        return;
+                    }
+
+                    const key = `${eventType}:${variant}`;
+                    let stream = diagnostic.streams.get(key);
+                    if (!stream) {
+                        stream = createStreamStats();
+                        diagnostic.streams.set(key, stream);
+                    }
+                    stream.eventBatches += 1;
+                    if (samples.length === 0) {
+                        stream.emptyBatches += 1;
+                    }
+
+                    for (const sample of samples) {
+                        const dx = Number(sample.movementX) || 0;
+                        const dy = Number(sample.movementY) || 0;
+                        const timestamp = Number(sample.timeStamp);
+
+                        stream.samples += 1;
+                        stream.sumX += dx;
+                        stream.sumY += dy;
+                        stream.absX += Math.abs(dx);
+                        stream.absY += Math.abs(dy);
+                        stream.path += Math.hypot(dx, dy);
+                        stream.maxAbsX = Math.max(stream.maxAbsX, Math.abs(dx));
+                        stream.maxAbsY = Math.max(stream.maxAbsY, Math.abs(dy));
+                        if (dx === 0 && dy === 0) {
+                            stream.zeroSamples += 1;
+                        }
+
+                        if (Number.isFinite(timestamp)) {
+                            if (stream.firstTimestamp === null) {
+                                stream.firstTimestamp = timestamp;
+                            }
+                            if (stream.lastTimestamp !== null) {
+                                const interval = timestamp - stream.lastTimestamp;
+                                if (interval >= 0) {
+                                    stream.intervalSum += interval;
+                                    stream.intervalCount += 1;
+                                    stream.minInterval = Math.min(stream.minInterval, interval);
+                                    stream.maxInterval = Math.max(stream.maxInterval, interval);
+                                }
+                            }
+                            stream.lastTimestamp = timestamp;
+                        }
+
+                        const bucket = `${dx},${dy}`;
+                        stream.histogram.set(bucket, (stream.histogram.get(bucket) || 0) + 1);
+                    }
+                }
+
+                function roundDiagnostic(value, digits = 2) {
+                    if (!Number.isFinite(value)) {
+                        return null;
+                    }
+                    const scale = 10 ** digits;
+                    return Math.round(value * scale) / scale;
+                }
+
+                function diagnosticRows() {
+                    return Array.from(diagnostic.streams.entries())
+                        .sort(([left], [right]) => left.localeCompare(right))
+                        .map(([streamName, stream]) => {
+                            const duration =
+                                stream.firstTimestamp === null || stream.lastTimestamp === null
+                                    ? 0
+                                    : stream.lastTimestamp - stream.firstTimestamp;
+                            const topDeltas = Array.from(stream.histogram.entries())
+                                .sort((left, right) => right[1] - left[1])
+                                .slice(0, 8)
+                                .map(([delta, count]) => `${delta} (${count})`)
+                                .join("; ");
+                            return {
+                                stream: streamName,
+                                eventBatches: stream.eventBatches,
+                                emptyBatches: stream.emptyBatches,
+                                samples: stream.samples,
+                                durationMs: roundDiagnostic(duration),
+                                estimatedHz:
+                                    duration > 0
+                                        ? roundDiagnostic(((stream.samples - 1) * 1000) / duration)
+                                        : null,
+                                sumX: roundDiagnostic(stream.sumX),
+                                sumY: roundDiagnostic(stream.sumY),
+                                absX: roundDiagnostic(stream.absX),
+                                absY: roundDiagnostic(stream.absY),
+                                path: roundDiagnostic(stream.path),
+                                maxAbsX: roundDiagnostic(stream.maxAbsX),
+                                maxAbsY: roundDiagnostic(stream.maxAbsY),
+                                zeroSamples: stream.zeroSamples,
+                                avgIntervalMs:
+                                    stream.intervalCount > 0
+                                        ? roundDiagnostic(
+                                              stream.intervalSum / stream.intervalCount,
+                                              3
+                                          )
+                                        : null,
+                                minIntervalMs:
+                                    stream.intervalCount > 0
+                                        ? roundDiagnostic(stream.minInterval, 3)
+                                        : null,
+                                maxIntervalMs:
+                                    stream.intervalCount > 0
+                                        ? roundDiagnostic(stream.maxInterval, 3)
+                                        : null,
+                                topDeltas
+                            };
+                        });
+                }
+
+                function buildDiagnosticReport() {
+                    return {
+                        sequence: diagnosticSequence,
+                        label: diagnostic.label,
+                        active: diagnostic.active,
+                        elapsedMs: roundDiagnostic(performance.now() - diagnostic.startedAt),
+                        pointerLockAtStart: diagnostic.lockAtStart,
+                        pointerLockNow: document.pointerLockElement === track,
+                        unadjustedRequested: unadjustedLockEl.checked,
+                        unadjustedStatus,
+                        userAgent: navigator.userAgent,
+                        devicePixelRatio: window.devicePixelRatio,
+                        viewport: `${window.innerWidth}x${window.innerHeight}`,
+                        streams: diagnosticRows()
+                    };
+                }
+
+                function updateDiagnosticUi() {
+                    startCaptureBtn.textContent = diagnostic.active
+                        ? "Restart capture (S)"
+                        : "Start capture (S)";
+                    stopCaptureBtn.disabled = !diagnostic.active;
+                    copyCaptureBtn.disabled = !lastDiagnosticReport;
+                    captureStatus.innerHTML = diagnostic.active
+                        ? `<div>Diagnostic capture: ${statusSpan("on", "recording")}</div>` +
+                          `<div>Trial: ${diagnostic.label}</div>`
+                        : `<div>Diagnostic capture: ${statusSpan("off", "idle")}</div>`;
+                }
+
+                function logDiagnosticSummary(finalReport = false) {
+                    if (!diagnostic.active && !finalReport) {
+                        return null;
+                    }
+                    const report = buildDiagnosticReport();
+                    console.log(
+                        `${DIAGNOSTIC_PREFIX} ${finalReport ? "final" : "live"} summary`,
+                        report
+                    );
+                    console.table(report.streams);
+                    if (finalReport) {
+                        console.log(`${DIAGNOSTIC_PREFIX} JSON\n${JSON.stringify(report, null, 2)}`);
+                    }
+                    return report;
+                }
+
+                function startDiagnosticCapture(label) {
+                    if (diagnosticTimer !== null) {
+                        clearInterval(diagnosticTimer);
+                    }
+                    diagnosticSequence += 1;
+                    diagnostic = createDiagnosticState(
+                        label ||
+                            `trial-${diagnosticSequence}-${
+                                document.pointerLockElement === track ? "locked" : "unlocked"
+                            }`
+                    );
+                    diagnostic.active = true;
+                    diagnostic.startedAt = performance.now();
+                    diagnostic.lockAtStart = document.pointerLockElement === track;
+                    ensureListening();
+                    console.log(`${DIAGNOSTIC_PREFIX} capture started`, buildDiagnosticReport());
+                    diagnosticTimer = setInterval(() => {
+                        if (periodicDiagnosticsEl.checked) {
+                            logDiagnosticSummary(false);
+                        }
+                    }, 1000);
+                    updateDiagnosticUi();
+                    return buildDiagnosticReport();
+                }
+
+                function stopDiagnosticCapture() {
+                    if (!diagnostic.active) {
+                        console.warn(`${DIAGNOSTIC_PREFIX} no active capture`);
+                        return lastDiagnosticReport;
+                    }
+                    diagnostic.active = false;
+                    if (diagnosticTimer !== null) {
+                        clearInterval(diagnosticTimer);
+                        diagnosticTimer = null;
+                    }
+                    lastDiagnosticReport = logDiagnosticSummary(true);
+                    updateDiagnosticUi();
+                    return lastDiagnosticReport;
+                }
+
+                async function copyLastDiagnosticReport() {
+                    if (!lastDiagnosticReport) {
+                        return;
+                    }
+                    const json = JSON.stringify(lastDiagnosticReport, null, 2);
+                    try {
+                        await navigator.clipboard.writeText(json);
+                        console.log(`${DIAGNOSTIC_PREFIX} copied the last JSON report`);
+                    } catch (error) {
+                        console.warn(
+                            `${DIAGNOSTIC_PREFIX} clipboard copy failed; copy the JSON below`,
+                            error
+                        );
+                        console.log(json);
+                    }
+                }
+
+                function drawHardwareStyleCursor(ctx, strokeColor) {
+                    ctx.clearRect(0, 0, CURSOR_SIZE, CURSOR_SIZE);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, 20);
+                    ctx.lineTo(5.5, 15.5);
+                    ctx.lineTo(9, 23.5);
+                    ctx.lineTo(11.5, 22.5);
+                    ctx.lineTo(8, 14);
+                    ctx.lineTo(14.5, 14);
+                    ctx.closePath();
+                    ctx.fillStyle = "#ffffff";
+                    ctx.strokeStyle = strokeColor || "#000000";
+                    ctx.lineWidth = 1.35;
+                    ctx.lineJoin = "miter";
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                function cssColorToStroke(cssVar) {
+                    // Resolve CSS variable to a concrete color for canvas stroke.
+                    const probe = document.createElement("div");
+                    probe.style.color = cssVar;
+                    document.body.appendChild(probe);
+                    const color = getComputedStyle(probe).color;
+                    probe.remove();
+                    return color || "#000000";
+                }
+
+                function streamKey(eventType, coalesced) {
+                    return `${eventType}:${coalesced ? "coal" : "raw"}`;
+                }
+
+                function createLayer(def, stream, coalesced, colIndex, rowIndex) {
+                    const el = document.createElement("div");
+                    el.className = "cursor-layer" + (coalesced ? " coalesced" : "");
+                    el.dataset.id = `${stream.type}-${coalesced ? "coal" : "raw"}-${def.id}`;
+
+                    const canvas = document.createElement("canvas");
+                    canvas.width = CURSOR_SIZE;
+                    canvas.height = CURSOR_SIZE;
+                    const ctx = canvas.getContext("2d");
+                    const stroke = coalesced
+                        ? cssColorToStroke("var(--coalesced)")
+                        : cssColorToStroke(stream.color);
+                    drawHardwareStyleCursor(ctx, stroke);
+
+                    const label = document.createElement("div");
+                    label.className = "label";
+                    const modeTag = coalesced ? "coal" : "raw";
+                    label.textContent = `${stream.type} ${modeTag} · ${def.label}`;
+                    label.style.borderColor = coalesced
+                        ? "color-mix(in srgb, var(--coalesced) 70%, transparent)"
+                        : `color-mix(in srgb, ${stream.color} 70%, transparent)`;
+
+                    el.appendChild(canvas);
+                    el.appendChild(label);
+                    track.appendChild(el);
+
+                    const rect = track.getBoundingClientRect();
+                    // Columns = event stream; rows stack if multiple coord tracks exist.
+                    const x = rect.left + LEFT_MARGIN + colIndex * COL_GAP;
+                    const y = rect.top + 12 + rowIndex * STACK_GAP;
+
+                    /** @type {Layer} */
+                    const layer = {
+                        el,
+                        def,
+                        eventType: stream.type,
+                        coalesced,
+                        x,
+                        y
+                    };
+                    setLayerPosition(layer, x, y);
+                    return layer;
+                }
+
+                function setLayerPosition(layer, x, y) {
+                    layer.x = x;
+                    layer.y = y;
+                    const rect = track.getBoundingClientRect();
+                    layer.el.style.transform = `translate(${x - rect.left}px, ${y - rect.top}px)`;
+                }
+
+                function clearLayers() {
+                    for (const layer of layers) {
+                        layer.el.remove();
+                    }
+                    layers = [];
+                    layerIndex = new Map();
+                    hint.classList.remove("hidden");
+                    track.classList.add("idle");
+                    updateCursorStyle();
+                }
+
+                function buildStreams() {
+                    /** @type {{ stream: typeof EVENT_STREAMS[0], coalesced: boolean }[]} */
+                    const cols = [];
+                    for (const stream of EVENT_STREAMS) {
+                        cols.push({ stream, coalesced: false });
+                        if (stream.supportsCoalesced) {
+                            cols.push({ stream, coalesced: true });
+                        }
+                    }
+                    return cols;
+                }
+
+                function spawnLayers() {
+                    clearLayers();
+                    const cols = buildStreams();
+                    layers = [];
+                    layerIndex = new Map();
+
+                    cols.forEach((col, colIndex) => {
+                        const key = streamKey(col.stream.type, col.coalesced);
+                        const group = [];
+                        COORD_TRACKS.forEach((def, rowIndex) => {
+                            const layer = createLayer(
+                                def,
+                                col.stream,
+                                col.coalesced,
+                                colIndex,
+                                rowIndex
+                            );
+                            layers.push(layer);
+                            group.push(layer);
+                        });
+                        layerIndex.set(key, group);
+                    });
+
+                    hint.classList.add("hidden");
+                    track.classList.remove("idle");
+                    updateCursorStyle();
+                    ensureListening();
+                }
+
+                function applySamples(eventType, coalesced, samples) {
+                    const group = layerIndex.get(streamKey(eventType, coalesced));
+                    if (!group || group.length === 0) {
+                        return;
+                    }
+                    for (const sample of samples) {
+                        for (const layer of group) {
+                            if (layer.def.mode === "absolute") {
+                                setLayerPosition(
+                                    layer,
+                                    layer.def.getX(sample),
+                                    layer.def.getY(sample)
+                                );
+                            } else {
+                                setLayerPosition(
+                                    layer,
+                                    layer.x + layer.def.getX(sample),
+                                    layer.y + layer.def.getY(sample)
+                                );
+                            }
+                        }
+                    }
+                }
+
+                function getCoalescedSamples(evt) {
+                    if (
+                        !supportsCoalesced ||
+                        !(evt instanceof PointerEvent) ||
+                        typeof evt.getCoalescedEvents !== "function"
+                    ) {
+                        return [];
+                    }
+                    const coalesced = evt.getCoalescedEvents();
+                    return coalesced && coalesced.length > 0 ? coalesced : [];
+                }
+
+                function onMoveEvent(evt) {
+                    if ("pointerType" in evt && evt.pointerType === "touch") {
+                        return;
+                    }
+
+                    const type = evt.type;
+                    const coal =
+                        type === "pointermove" || type === "pointerrawupdate"
+                            ? getCoalescedSamples(evt)
+                            : [];
+
+                    recordDiagnosticSamples(type, "raw", [evt]);
+                    if (type === "pointermove" || type === "pointerrawupdate") {
+                        // Record the actual coalesced list, including empty batches. The cursor
+                        // visualization may mirror the delivered event when this list is empty,
+                        // but diagnostics must not disguise that fallback as a coalesced sample.
+                        recordDiagnosticSamples(type, "coal", coal);
+                    }
+
+                    // Uncoalesced stream: the delivered event itself.
+                    applySamples(type, false, [evt]);
+
+                    // Coalesced stream (pointer events only).
+                    if (type === "pointermove" || type === "pointerrawupdate") {
+                        if (coal.length > 0) {
+                            applySamples(type, true, coal);
+                            if (type === "pointermove") {
+                                stats.pointermoveCoal += coal.length;
+                            } else {
+                                stats.pointerrawupdateCoal += coal.length;
+                            }
+                        } else {
+                            // No coalesced list — mirror the raw event so the column still moves.
+                            applySamples(type, true, [evt]);
+                        }
+                    }
+
+                    if (type === "mousemove") {
+                        stats.mousemove += 1;
+                    } else if (type === "pointermove") {
+                        stats.pointermove += 1;
+                    } else if (type === "pointerrawupdate") {
+                        stats.pointerrawupdate += 1;
+                    }
+
+                    document.getElementById("statMousemove").textContent = String(stats.mousemove);
+                    document.getElementById("statPointermove").textContent = String(
+                        stats.pointermove
+                    );
+                    document.getElementById("statPointermoveCoal").textContent = String(
+                        stats.pointermoveCoal
+                    );
+                    document.getElementById("statRaw").textContent = String(stats.pointerrawupdate);
+                    document.getElementById("statRawCoal").textContent = String(
+                        stats.pointerrawupdateCoal
+                    );
+                    document.getElementById("statType").textContent = type;
+                    document.getElementById("statClient").textContent =
+                        `${evt.clientX.toFixed(1)}, ${evt.clientY.toFixed(1)}`;
+                    document.getElementById("statMovement").textContent =
+                        `${evt.movementX.toFixed(1)}, ${evt.movementY.toFixed(1)}`;
+                }
+
+                function detachListeners() {
+                    for (const entry of attached) {
+                        track.removeEventListener(entry.type, entry.handler, entry.opts);
+                    }
+                    attached = [];
+                    listening = false;
+                }
+
+                function ensureListening() {
+                    if (listening) {
+                        return;
+                    }
+                    detachListeners();
+
+                    const handler = (evt) => onMoveEvent(evt);
+
+                    const types = ["mousemove"];
+                    if (supportsPointer) {
+                        types.push("pointermove");
+                    }
+                    if (supportsRawUpdate) {
+                        types.push("pointerrawupdate");
+                    }
+
+                    for (const type of types) {
+                        const opts = type === "pointerrawupdate" ? { capture: true } : undefined;
+                        track.addEventListener(type, handler, opts);
+                        attached.push({ type, handler, opts });
+                    }
+                    listening = true;
+                }
+
+                function updateCursorStyle() {
+                    track.classList.toggle("hide-cursor", hideSystemCursorEl.checked);
+                    track.style.cursor = hideSystemCursorEl.checked ? "" : "crosshair";
+                }
+
+                function statusSpan(cls, text) {
+                    return `<span class="${cls}">${text}</span>`;
+                }
+
+                function updateLockUi() {
+                    lockActive = document.pointerLockElement === track;
+                    const lockLabel = lockActive
+                        ? statusSpan("on", "on")
+                        : statusSpan("off", "off");
+
+                    let unadjLabel;
+                    if (!lockActive) {
+                        unadjLabel = statusSpan("off", "n/a");
+                        if (unadjustedStatus === "n/a") {
+                            // keep
+                        }
+                    } else if (unadjustedStatus === "on") {
+                        unadjLabel = statusSpan("on", "requested (browser accepted)");
+                    } else if (unadjustedStatus === "off") {
+                        unadjLabel = statusSpan("off", "no (not requested)");
+                    } else if (unadjustedStatus === "unsupported") {
+                        unadjLabel = statusSpan("err", "no (unsupported)");
+                    } else if (unadjustedStatus === "failed") {
+                        unadjLabel = statusSpan("err", "no (request failed; fell back)");
+                    } else {
+                        unadjLabel = statusSpan("off", unadjustedStatus);
+                    }
+
+                    lockStatus.innerHTML =
+                        `<div>Pointer lock: ${lockLabel}</div>` +
+                        `<div>Unadjusted movement: ${unadjLabel}</div>`;
+
+                    lockBtn.disabled = lockActive;
+                    unlockBtn.disabled = !lockActive;
+                }
+
+                // --- Event wiring ---
+
+                track.addEventListener("mousedown", (evt) => {
+                    if (evt.button === 2) {
+                        evt.preventDefault();
+                        clearLayers();
+                        detachListeners();
+                        return;
+                    }
+                    if (evt.button !== 0) {
+                        return;
+                    }
+                    track.focus({ preventScroll: true });
+                    spawnLayers();
+                });
+
+                track.addEventListener("contextmenu", (evt) => {
+                    evt.preventDefault();
+                });
+
+                hideSystemCursorEl.addEventListener("change", updateCursorStyle);
+
+                lockBtn.addEventListener("click", async () => {
+                    track.focus({ preventScroll: true });
+                    const wantUnadjusted = unadjustedLockEl.checked;
+
+                    if (wantUnadjusted) {
+                        pendingUnadjustedRequest = true;
+                        try {
+                            const req = track.requestPointerLock({ unadjustedMovement: true });
+                            if (req && typeof req.then === "function") {
+                                await req;
+                            }
+                            // Promise resolved → unadjusted granted (pointerlockchange may already
+                            // have run; ensure status sticks).
+                            if (document.pointerLockElement === track) {
+                                unadjustedStatus = "on";
+                            }
+                            pendingUnadjustedRequest = null;
+                            updateLockUi();
+                            return;
+                        } catch (err) {
+                            const msg = err && (err.message || String(err));
+                            console.warn("unadjusted requestPointerLock failed:", msg);
+                            unadjustedStatus = /unadjusted|not supported|TypeError/i.test(
+                                String(msg)
+                            )
+                                ? "unsupported"
+                                : "failed";
+                            // Fall through to a normal lock request.
+                        }
+                    }
+
+                    pendingUnadjustedRequest = false;
+                    try {
+                        const req = track.requestPointerLock();
+                        if (req && typeof req.then === "function") {
+                            await req;
+                        }
+                        if (document.pointerLockElement === track && unadjustedStatus !== "unsupported" && unadjustedStatus !== "failed") {
+                            unadjustedStatus = "off";
+                        }
+                    } catch (err2) {
+                        console.warn("requestPointerLock failed", err2);
+                    }
+                    pendingUnadjustedRequest = null;
+                    updateLockUi();
+                });
+
+                unlockBtn.addEventListener("click", () => {
+                    document.exitPointerLock();
+                });
+
+                document.addEventListener("pointerlockchange", () => {
+                    if (document.pointerLockElement === track) {
+                        if (pendingUnadjustedRequest === true) {
+                            unadjustedStatus = "on";
+                        } else if (pendingUnadjustedRequest === false) {
+                            // Preserve failed/unsupported from a prior unadjusted attempt.
+                            if (
+                                unadjustedStatus !== "unsupported" &&
+                                unadjustedStatus !== "failed"
+                            ) {
+                                unadjustedStatus = "off";
+                            }
+                        }
+                    } else {
+                        unadjustedStatus = "n/a";
+                        pendingUnadjustedRequest = null;
+                    }
+                    updateLockUi();
+                    console.log(`${DIAGNOSTIC_PREFIX} pointer lock changed`, {
+                        locked: document.pointerLockElement === track,
+                        unadjustedRequested: unadjustedLockEl.checked,
+                        unadjustedStatus
+                    });
+                });
+
+                document.addEventListener("pointerlockerror", () => {
+                    lockStatus.innerHTML =
+                        `<div>Pointer lock: ${statusSpan("err", "error")}</div>` +
+                        `<div>Unadjusted movement: ${statusSpan("off", "n/a")}</div>` +
+                        `<div class="err">Lock failed (user gesture required?)</div>`;
+                    unadjustedStatus = "n/a";
+                    console.error(`${DIAGNOSTIC_PREFIX} pointer lock error`);
+                });
+
+                clearBtn.addEventListener("click", () => {
+                    clearLayers();
+                    detachListeners();
+                });
+
+                resetStatsBtn.addEventListener("click", () => {
+                    stats = {
+                        mousemove: 0,
+                        pointermove: 0,
+                        pointermoveCoal: 0,
+                        pointerrawupdate: 0,
+                        pointerrawupdateCoal: 0
+                    };
+                    document.getElementById("statMousemove").textContent = "0";
+                    document.getElementById("statPointermove").textContent = "0";
+                    document.getElementById("statPointermoveCoal").textContent = "0";
+                    document.getElementById("statRaw").textContent = "0";
+                    document.getElementById("statRawCoal").textContent = "0";
+                    document.getElementById("statType").textContent = "—";
+                    document.getElementById("statClient").textContent = "—";
+                    document.getElementById("statMovement").textContent = "—";
+                });
+
+                startCaptureBtn.addEventListener("click", () => {
+                    startDiagnosticCapture();
+                });
+
+                stopCaptureBtn.addEventListener("click", () => {
+                    stopDiagnosticCapture();
+                });
+
+                copyCaptureBtn.addEventListener("click", () => {
+                    copyLastDiagnosticReport();
+                });
+
+                document.addEventListener("keydown", (evt) => {
+                    if (evt.repeat || evt.ctrlKey || evt.altKey || evt.metaKey) {
+                        return;
+                    }
+                    const target = evt.target;
+                    if (
+                        target instanceof HTMLInputElement ||
+                        target instanceof HTMLTextAreaElement ||
+                        target instanceof HTMLSelectElement
+                    ) {
+                        return;
+                    }
+                    if (evt.key.toLowerCase() === "s") {
+                        startDiagnosticCapture();
+                    } else if (evt.key.toLowerCase() === "e") {
+                        stopDiagnosticCapture();
+                    }
+                });
+
+                window.addEventListener("resize", () => {
+                    for (const layer of layers) {
+                        setLayerPosition(layer, layer.x, layer.y);
+                    }
+                });
+
+                updateCursorStyle();
+                updateLockUi();
+                updateDiagnosticUi();
+
+                window.pointerLockDiagnostics = {
+                    start: startDiagnosticCapture,
+                    stop: stopDiagnosticCapture,
+                    snapshot: () => logDiagnosticSummary(false),
+                    getLastReport: () => lastDiagnosticReport,
+                    copy: copyLastDiagnosticReport
+                };
+                console.log(
+                    `${DIAGNOSTIC_PREFIX} ready. Use the Diagnostics controls, S/E keys, or`,
+                    "pointerLockDiagnostics.start('label') / pointerLockDiagnostics.stop()"
+                );
+            })();
+        </script>
+    </body>
+</html>
