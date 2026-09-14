@@ -416,8 +416,8 @@
                                 >Leave this off when evaluating system-style acceleration. When
                                 enabled, it passes <code>{ unadjustedMovement: true }</code> to
                                 <code>requestPointerLock</code>. If the browser rejects it, falls
-                                back to a normal lock. Android currently accepts this option but
-                                does not distinguish it from normal pointer lock.</span
+                                back to a normal lock. Capture both modes separately to determine
+                                whether Android distinguishes them.</span
                             >
                         </span>
                     </label>
@@ -619,6 +619,8 @@
                         label,
                         startedAt: 0,
                         lockAtStart: false,
+                        unadjustedRequestedAtStart: false,
+                        unadjustedStatusAtStart: "n/a",
                         lockTransitions: [],
                         streams: new Map()
                     };
@@ -637,8 +639,11 @@
                         maxAbsX: 0,
                         maxAbsY: 0,
                         zeroSamples: 0,
+                        nonZeroSamples: 0,
                         firstTimestamp: null,
                         lastTimestamp: null,
+                        firstMovementTimestamp: null,
+                        lastMovementTimestamp: null,
                         intervalSum: 0,
                         intervalCount: 0,
                         minInterval: Infinity,
@@ -682,6 +687,14 @@
                         stream.maxAbsY = Math.max(stream.maxAbsY, Math.abs(dy));
                         if (dx === 0 && dy === 0) {
                             stream.zeroSamples += 1;
+                        } else {
+                            stream.nonZeroSamples += 1;
+                            if (Number.isFinite(timestamp)) {
+                                if (stream.firstMovementTimestamp === null) {
+                                    stream.firstMovementTimestamp = timestamp;
+                                }
+                                stream.lastMovementTimestamp = timestamp;
+                            }
                         }
 
                         if (Number.isFinite(timestamp)) {
@@ -727,6 +740,12 @@
                                 stream.firstTimestamp === null || stream.lastTimestamp === null
                                     ? 0
                                     : stream.lastTimestamp - stream.firstTimestamp;
+                            const movementDuration =
+                                stream.firstMovementTimestamp === null ||
+                                stream.lastMovementTimestamp === null
+                                    ? 0
+                                    : stream.lastMovementTimestamp -
+                                      stream.firstMovementTimestamp;
                             const topDeltas = Array.from(stream.histogram.entries())
                                 .sort((left, right) => right[1] - left[1])
                                 .slice(0, 8)
@@ -737,7 +756,9 @@
                                 eventBatches: stream.eventBatches,
                                 emptyBatches: stream.emptyBatches,
                                 samples: stream.samples,
+                                nonZeroSamples: stream.nonZeroSamples,
                                 durationMs: roundDiagnostic(duration),
+                                movementDurationMs: roundDiagnostic(movementDuration),
                                 estimatedHz:
                                     duration > 0
                                         ? roundDiagnostic(((stream.samples - 1) * 1000) / duration)
@@ -755,6 +776,10 @@
                                 absX: roundDiagnostic(stream.absX),
                                 absY: roundDiagnostic(stream.absY),
                                 path: roundDiagnostic(stream.path),
+                                pathPerMovementSecond:
+                                    movementDuration > 0
+                                        ? roundDiagnostic((stream.path * 1000) / movementDuration)
+                                        : null,
                                 maxAbsX: roundDiagnostic(stream.maxAbsX),
                                 maxAbsY: roundDiagnostic(stream.maxAbsY),
                                 zeroSamples: stream.zeroSamples,
@@ -787,8 +812,8 @@
                         pointerLockAtStart: diagnostic.lockAtStart,
                         pointerLockNow: document.pointerLockElement === track,
                         lockTransitions: diagnostic.lockTransitions.slice(),
-                        unadjustedRequested: unadjustedLockEl.checked,
-                        unadjustedStatus,
+                        unadjustedRequested: diagnostic.unadjustedRequestedAtStart,
+                        unadjustedStatus: diagnostic.unadjustedStatusAtStart,
                         userAgent: navigator.userAgent,
                         devicePixelRatio: window.devicePixelRatio,
                         viewport: `${window.innerWidth}x${window.innerHeight}`,
@@ -829,15 +854,20 @@
                         clearInterval(diagnosticTimer);
                     }
                     diagnosticSequence += 1;
+                    const locked = document.pointerLockElement === track;
+                    const mode = locked
+                        ? unadjustedStatus === "on"
+                            ? "locked-unadjusted"
+                            : "locked-adjusted"
+                        : "unlocked";
                     diagnostic = createDiagnosticState(
-                        label ||
-                            `trial-${diagnosticSequence}-${
-                                document.pointerLockElement === track ? "locked" : "unlocked"
-                            }`
+                        label || `trial-${diagnosticSequence}-${mode}`
                     );
                     diagnostic.active = true;
                     diagnostic.startedAt = performance.now();
-                    diagnostic.lockAtStart = document.pointerLockElement === track;
+                    diagnostic.lockAtStart = locked;
+                    diagnostic.unadjustedRequestedAtStart = locked && unadjustedLockEl.checked;
+                    diagnostic.unadjustedStatusAtStart = locked ? unadjustedStatus : "n/a";
                     ensureListening();
                     console.log(`${DIAGNOSTIC_PREFIX} capture started`, buildDiagnosticReport());
                     diagnosticTimer = setInterval(() => {
@@ -1017,6 +1047,25 @@
                     track.classList.remove("idle");
                     updateCursorStyle();
                     ensureListening();
+                }
+
+                function resetLayerPositions() {
+                    const rect = track.getBoundingClientRect();
+                    buildStreams().forEach((col, colIndex) => {
+                        const group = layerIndex.get(
+                            streamKey(col.stream.type, col.coalesced)
+                        );
+                        if (!group) {
+                            return;
+                        }
+                        group.forEach((layer, rowIndex) => {
+                            setLayerPosition(
+                                layer,
+                                rect.left + LEFT_MARGIN + colIndex * COL_GAP,
+                                rect.top + 12 + rowIndex * STACK_GAP
+                            );
+                        });
+                    });
                 }
 
                 function applySamples(eventType, coalesced, samples) {
@@ -1204,7 +1253,11 @@
                         return;
                     }
                     track.focus({ preventScroll: true });
-                    spawnLayers();
+                    if (layers.length === 0) {
+                        spawnLayers();
+                    } else {
+                        resetLayerPositions();
+                    }
                 });
 
                 track.addEventListener("contextmenu", (evt) => {
