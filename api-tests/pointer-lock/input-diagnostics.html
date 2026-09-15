@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pointer Lock Button and Raw Input Test</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #f6f04a;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    #container {
+      position: relative;
+      height: 100%;
+    }
+
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 10px 12px;
+      background: rgba(0, 0, 0, 0.18);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+      display: grid;
+      gap: 6px;
+    }
+
+    #hud .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      align-items: center;
+    }
+
+    #stage {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #93d0ff;
+      cursor: pointer;
+    }
+
+    #ball {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #ff3b3b;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      transform: translate(-50%, -50%);
+      left: 50%;
+      top: 50%;
+    }
+
+    #log {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      width: min(720px, calc(100% - 24px));
+      max-height: 38%;
+      overflow: auto;
+      background: rgba(0,0,0,0.65);
+      color: #fff;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.3;
+      white-space: pre-wrap;
+      z-index: 5;
+    }
+
+    button {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.2);
+      background: #fff;
+      cursor: pointer;
+    }
+
+    select {
+      padding: 5px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.2);
+      background: #fff;
+    }
+
+    code {
+      background: rgba(255,255,255,0.5);
+      padding: 1px 4px;
+      border-radius: 6px;
+    }
+
+    .pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.55);
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+  </style>
+</head>
+
+<body>
+<div id="container">
+  <div id="hud">
+    <div class="row">
+      <strong>Pointer Lock Button and Raw Input Test</strong>
+      <span class="pill" id="statusLock">lock: unknown</span>
+      <span class="pill" id="statusFS">fullscreen: unknown</span>
+      <span class="pill" id="statusRawExposed">pointerrawupdate exposed: unknown</span>
+      <span class="pill" id="statusRawFiring">pointerrawupdate firing: unknown</span>
+    </div>
+    <div class="row">
+      <span>Click the blue area to enter <code>fullscreen</code> and request <code>pointer lock</code>.</span>
+      <button id="btnExit">Exit fullscreen</button>
+      <button id="btnClear">Clear log</button>
+      <button id="btnCenter">Center ball</button>
+    </div>
+    <div class="row">
+      <label>Test device:
+        <select id="testDevice">
+          <option value="physical-mouse">Physical mouse</option>
+          <option value="touchpad">Touchpad</option>
+        </select>
+      </label>
+      <button id="btnStartButtons">Start button capture</button>
+      <button id="btnStopButtons">Stop + print JSON</button>
+      <button id="btnCopyButtons">Copy JSON</button>
+      <span class="pill" id="buttonCaptureStatus">button capture: inactive</span>
+    </div>
+    <div class="row">
+      <span>Protocol: start capture, test right/middle clicks unlocked, enter pointer lock,
+        repeat the same clicks, then stop and copy JSON. Run once per device.</span>
+    </div>
+    <div class="row">
+      <span class="pill" id="lastEvent">last event: none</span>
+      <span class="pill" id="pos">pos: (0, 0)</span>
+      <span class="pill" id="counts">raw: 0 | move: 0</span>
+      <span class="pill" id="mode">mode: unknown</span>
+      <span class="pill" id="rightBtn">right button: up</span>
+    </div>
+  </div>
+
+  <div id="stage" tabindex="0" aria-label="stage">
+    <div id="ball"></div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const container = document.getElementById('container');
+  const stage = document.getElementById('stage');
+  const ball  = document.getElementById('ball');
+  const logEl = document.getElementById('log');
+
+  const statusLock = document.getElementById('statusLock');
+  const statusFS   = document.getElementById('statusFS');
+  const statusRawExposed = document.getElementById('statusRawExposed');
+  const statusRawFiring  = document.getElementById('statusRawFiring');
+
+  const lastEventEl = document.getElementById('lastEvent');
+  const posEl = document.getElementById('pos');
+  const countsEl = document.getElementById('counts');
+  const modeEl = document.getElementById('mode');
+  const rightBtnEl = document.getElementById('rightBtn');
+
+  const btnExit = document.getElementById('btnExit');
+  const btnClear = document.getElementById('btnClear');
+  const btnCenter = document.getElementById('btnCenter');
+  const btnStartButtons = document.getElementById('btnStartButtons');
+  const btnStopButtons = document.getElementById('btnStopButtons');
+  const btnCopyButtons = document.getElementById('btnCopyButtons');
+  const testDevice = document.getElementById('testDevice');
+  const buttonCaptureStatus = document.getElementById('buttonCaptureStatus');
+
+  let x = 0, y = 0;
+  let rawCount = 0, moveCount = 0;
+
+  const rawExposed = ('onpointerrawupdate' in window);
+  let rawFiredEver = false;
+
+  let useRawForMotion = false;
+  let rawHasUsableDelta = false;
+  let rawZeroStreak = 0;
+  let moveNonzeroSeen = false;
+  let lockStartTime = 0;
+
+  let buttonCaptureSequence = 0;
+  let buttonCapture = null;
+  const pendingDownButton = {pointer: null, mouse: null};
+
+  function log(msg) {
+    const t = new Date().toISOString().slice(11, 23);
+    logEl.textContent += `[${t}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(msg);
+  }
+
+  function buttonsNames(buttons) {
+    const names = [];
+    if (buttons & 1) names.push('left');
+    if (buttons & 2) names.push('right');
+    if (buttons & 4) names.push('middle');
+    if (buttons & 8) names.push('back');
+    if (buttons & 16) names.push('forward');
+    return names.length ? names.join('+') : 'none';
+  }
+
+  function captureEnvironment() {
+    return {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      devicePixelRatio: window.devicePixelRatio,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      pointerRawUpdateExposed: rawExposed
+    };
+  }
+
+  function updateButtonCaptureStatus() {
+    const active = buttonCapture && buttonCapture.active;
+    const count = buttonCapture ? buttonCapture.events.length : 0;
+    buttonCaptureStatus.textContent = active
+      ? `button capture: ${buttonCapture.label} (${count} events)`
+      : `button capture: inactive (${count} events)`;
+  }
+
+  function startButtonCapture(label = testDevice.value) {
+    buttonCaptureSequence++;
+    pendingDownButton.pointer = null;
+    pendingDownButton.mouse = null;
+    buttonCapture = {
+      sequence: buttonCaptureSequence,
+      label,
+      active: true,
+      startedAt: new Date().toISOString(),
+      startPerformanceMs: performance.now(),
+      pointerLockAtStart: Boolean(document.pointerLockElement),
+      environment: captureEnvironment(),
+      lockTransitions: [],
+      events: []
+    };
+    updateButtonCaptureStatus();
+    console.log('[PointerButtonTest] capture started', buttonCapture);
+    log(`Button capture started: ${label}`);
+    return buttonCapture;
+  }
+
+  function buttonCaptureSnapshot() {
+    if (!buttonCapture) return null;
+    const mismatches = buttonCapture.events.filter(e => e.pairResult === 'MISMATCH');
+    return {
+      sequence: buttonCapture.sequence,
+      label: buttonCapture.label,
+      active: buttonCapture.active,
+      startedAt: buttonCapture.startedAt,
+      elapsedMs: Number((performance.now() - buttonCapture.startPerformanceMs).toFixed(1)),
+      pointerLockAtStart: buttonCapture.pointerLockAtStart,
+      pointerLockNow: Boolean(document.pointerLockElement),
+      environment: buttonCapture.environment,
+      lockTransitions: buttonCapture.lockTransitions,
+      eventCount: buttonCapture.events.length,
+      mismatchCount: mismatches.length,
+      events: buttonCapture.events
+    };
+  }
+
+  function stopButtonCapture() {
+    if (!buttonCapture) return null;
+    buttonCapture.active = false;
+    const snapshot = buttonCaptureSnapshot();
+    updateButtonCaptureStatus();
+    console.log('[PointerButtonTest] final summary', snapshot);
+    console.log(`[PointerButtonTest] JSON\n${JSON.stringify(snapshot, null, 2)}`);
+    log(`Button capture stopped: ${snapshot.eventCount} events, ${snapshot.mismatchCount} mismatches`);
+    return snapshot;
+  }
+
+  function isTestSurfaceEvent(e) {
+    return Boolean(document.pointerLockElement) || e.composedPath().includes(stage);
+  }
+
+  function recordButtonEvent(e, eventInterface) {
+    if (!buttonCapture || !buttonCapture.active || !isTestSurfaceEvent(e)) return;
+
+    let pairedDownButton = null;
+    let pairResult = null;
+    if (e.type === `${eventInterface}down`) {
+      pendingDownButton[eventInterface] = e.button;
+    } else if (e.type === `${eventInterface}up`) {
+      pairedDownButton = pendingDownButton[eventInterface];
+      if (pairedDownButton !== null) {
+        pairResult = pairedDownButton === e.button ? 'MATCH' : 'MISMATCH';
+      } else {
+        pairResult = 'NO_DOWN_EVENT';
+      }
+      pendingDownButton[eventInterface] = null;
+    }
+
+    const entry = {
+      index: buttonCapture.events.length + 1,
+      elapsedMs: Number((performance.now() - buttonCapture.startPerformanceMs).toFixed(1)),
+      lock: document.pointerLockElement ? 'locked' : 'unlocked',
+      interface: eventInterface,
+      type: e.type,
+      button: e.button,
+      buttonName: buttonName(e.button),
+      buttons: e.buttons,
+      buttonsNames: buttonsNames(e.buttons),
+      pairedDownButton,
+      pairResult,
+      pointerType: e.pointerType || null,
+      pointerId: Number.isFinite(e.pointerId) ? e.pointerId : null,
+      isPrimary: typeof e.isPrimary === 'boolean' ? e.isPrimary : null,
+      detail: e.detail,
+      clientX: Number(e.clientX.toFixed(2)),
+      clientY: Number(e.clientY.toFixed(2)),
+      movementX: e.movementX || 0,
+      movementY: e.movementY || 0,
+      timeStamp: Number(e.timeStamp.toFixed(3)),
+      isTrusted: e.isTrusted,
+      firesTouchEvents: e.sourceCapabilities
+        ? e.sourceCapabilities.firesTouchEvents
+        : null
+    };
+    buttonCapture.events.push(entry);
+    updateButtonCaptureStatus();
+    console.log('[PointerButtonTest] event', entry);
+    if (pairResult === 'MISMATCH') {
+      console.error('[PointerButtonTest] BUTTON MISMATCH', entry);
+    }
+  }
+
+  function setLastEvent(name, dx, dy) {
+    lastEventEl.textContent = `last event: ${name} dx=${dx} dy=${dy}`;
+    posEl.textContent = `pos: (${Math.round(x)}, ${Math.round(y)})`;
+    countsEl.textContent = `raw: ${rawCount} | move: ${moveCount}`;
+    modeEl.textContent = `mode: ${useRawForMotion ? 'raw (pointerrawupdate)' : 'fallback (pointermove)'}`;
+  }
+
+  function clampToStage() {
+    const r = stage.getBoundingClientRect();
+    x = Math.max(0, Math.min(r.width, x));
+    y = Math.max(0, Math.min(r.height, y));
+  }
+
+  function paintBall() {
+    ball.style.left = `${x}px`;
+    ball.style.top  = `${y}px`;
+  }
+
+  function centerBall() {
+    const r = stage.getBoundingClientRect();
+    x = r.width / 2;
+    y = r.height / 2;
+    paintBall();
+    setLastEvent('center', 0, 0);
+  }
+
+  function updateStatus() {
+    statusLock.textContent = `lock: ${document.pointerLockElement ? 'ACTIVE' : 'inactive'}`;
+    statusFS.textContent = `fullscreen: ${document.fullscreenElement ? 'ACTIVE' : 'inactive'}`;
+    statusRawExposed.textContent = `pointerrawupdate exposed: ${rawExposed ? 'yes' : 'no'}`;
+    statusRawFiring.textContent = `pointerrawupdate firing: ${rawFiredEver ? 'yes' : 'no'}`;
+    modeEl.textContent = `mode: ${useRawForMotion ? 'raw (pointerrawupdate)' : 'fallback (pointermove)'}`;
+  }
+
+  function applyDelta(dx, dy, sourceName) {
+    x += dx;
+    y += dy;
+    clampToStage();
+    paintBall();
+    setLastEvent(sourceName, dx, dy);
+  }
+
+  function maybeFallbackFromRaw() {
+    if (!document.pointerLockElement) return;
+    if (rawHasUsableDelta) return;
+    if (useRawForMotion) return;
+
+    const timedOut = (performance.now() - lockStartTime) > 400;
+
+    if ((rawZeroStreak >= 20 || timedOut) && moveNonzeroSeen) {
+      log('pointerrawupdate fired but did not provide usable movementX/Y; using pointermove fallback');
+      useRawForMotion = false;
+      updateStatus();
+    }
+  }
+
+  function handleRaw(e) {
+    if (!document.pointerLockElement) return;
+
+    rawCount++;
+    rawFiredEver = true;
+
+    const dx = e.movementX || 0;
+    const dy = e.movementY || 0;
+
+    // Inspect coalesced events and verify their deltas sum to the parent's
+    const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    let coalescedSumX = 0, coalescedSumY = 0;
+    for (const ce of coalesced) {
+      coalescedSumX += ce.movementX || 0;
+      coalescedSumY += ce.movementY || 0;
+    }
+
+    if (rawCount === 1) {
+      const cancelable = typeof e.cancelable === 'boolean' ? e.cancelable : 'n/a';
+      if (coalesced.length > 0) {
+        log(`pointerrawupdate fired (first). coalesced[${coalesced.length}] sum=(${coalescedSumX},${coalescedSumY}) parent=(${dx},${dy}). cancelable=${cancelable}`);
+      } else {
+        log(`pointerrawupdate fired (first). getCoalescedEvents returned 0 events. cancelable=${cancelable}`);
+      }
+    }
+
+    const parentNonZero = dx !== 0 || dy !== 0;
+    if (coalesced.length > 0 && parentNonZero) {
+      const sumMatchesParent = coalescedSumX === dx && coalescedSumY === dy;
+      if (coalescedSumX === 0 && coalescedSumY === 0) {
+        log(`BUG #${rawCount}: coalesced[${coalesced.length}] sum=(0,0) but parent=(${dx},${dy}) — coalesced movementX/Y all zero despite non-zero parent`);
+      } else if (!sumMatchesParent) {
+        log(`MISMATCH #${rawCount}: coalesced[${coalesced.length}] sum=(${coalescedSumX},${coalescedSumY}) != parent=(${dx},${dy})`);
+      } else {
+        log(`OK #${rawCount}: coalesced[${coalesced.length}] sum=(${coalescedSumX},${coalescedSumY}) matches parent=(${dx},${dy})`);
+      }
+    }
+
+    if (dx !== 0 || dy !== 0) {
+      rawHasUsableDelta = true;
+      rawZeroStreak = 0;
+
+      if (!useRawForMotion) {
+        useRawForMotion = true;
+        log('pointerrawupdate has usable movementX/Y; switching to raw input path');
+      }
+
+      applyDelta(dx, dy, 'pointerrawupdate');
+    } else {
+      rawZeroStreak++;
+      if (!rawHasUsableDelta && rawCount === 1) {
+        log('pointerrawupdate fired but movementX/Y are 0 so far');
+      }
+      maybeFallbackFromRaw();
+      setLastEvent('pointerrawupdate (0,0)', dx, dy);
+    }
+
+    updateStatus();
+  }
+
+  function handleMove(e) {
+    if (!document.pointerLockElement) return;
+
+    moveCount++;
+    const dx = e.movementX || 0;
+    const dy = e.movementY || 0;
+
+    if (dx !== 0 || dy !== 0) {
+      moveNonzeroSeen = true;
+    }
+
+    if (useRawForMotion) {
+      setLastEvent('pointermove (ignored; raw active)', dx, dy);
+      return;
+    }
+
+    applyDelta(dx, dy, 'pointermove');
+    updateStatus();
+  }
+
+  async function requestFullscreenAndLock() {
+    try {
+      if (!document.fullscreenElement) {
+        await container.requestFullscreen();
+        log('Entered fullscreen');
+      }
+    } catch (e) {
+      log(`Fullscreen request failed: ${e.name}: ${e.message}`);
+      throw e;
+    }
+
+    try {
+      stage.requestPointerLock();
+      log('Requested pointer lock');
+    } catch (e) {
+      log(`requestPointerLock() threw: ${e.name}: ${e.message}`);
+      throw e;
+    }
+  }
+
+  stage.addEventListener('click', () => {
+    log('Click: requesting fullscreen + pointer lock');
+    requestFullscreenAndLock();
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    if (buttonCapture && buttonCapture.active) {
+      const transition = {
+        elapsedMs: Number((performance.now() - buttonCapture.startPerformanceMs).toFixed(1)),
+        locked: Boolean(document.pointerLockElement)
+      };
+      buttonCapture.lockTransitions.push(transition);
+      console.log('[PointerButtonTest] pointer lock changed', transition);
+    }
+    if (document.pointerLockElement) {
+      log('pointerlockchange: LOCKED');
+      lockStartTime = performance.now();
+
+      useRawForMotion = false;
+      rawHasUsableDelta = false;
+      rawZeroStreak = 0;
+      moveNonzeroSeen = false;
+
+      centerBall();
+      stage.focus();
+
+      setTimeout(() => {
+        maybeFallbackFromRaw();
+        log(`(post-lock) rawExposed=${rawExposed}, rawFiredEver=${rawFiredEver}, rawHasUsableDelta=${rawHasUsableDelta}, useRawForMotion=${useRawForMotion}`);
+        updateStatus();
+      }, 1200);
+    } else {
+      log('pointerlockchange: UNLOCKED');
+      // useRawForMotion = false;
+      rawHasUsableDelta = false;
+      rawZeroStreak = 0;
+      moveNonzeroSeen = false;
+    }
+    updateStatus();
+  });
+
+  document.addEventListener('pointerlockerror', (e) => {
+    updateStatus();
+    log(`pointerlockerror: ${e.type}`);
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    updateStatus();
+    log(`fullscreenchange: ${document.fullscreenElement ? 'ENTER' : 'EXIT'}`);
+  });
+
+  window.addEventListener('focus', () => log('window focus'));
+  window.addEventListener('blur',  () => log('window blur'));
+
+  document.addEventListener('pointerrawupdate', handleRaw);
+  document.addEventListener('pointermove', handleMove);
+
+  function buttonName(button) {
+    switch (button) {
+      case 0: return 'left';
+      case 1: return 'middle';
+      case 2: return 'right';
+      case 3: return 'back';
+      case 4: return 'forward';
+      default: return `button${button}`;
+    }
+  }
+
+  function handlePointerDown(e) {
+    const name = buttonName(e.button);
+    if (e.button === 2) rightBtnEl.textContent = 'right button: DOWN';
+    log(`pointerdown: button=${e.button} (${name}) buttons=${e.buttons} pointerType=${e.pointerType} at (${Math.round(e.clientX)}, ${Math.round(e.clientY)})`);
+    recordButtonEvent(e, 'pointer');
+    setLastEvent(`pointerdown (${name})`, 0, 0);
+  }
+
+  function handlePointerUp(e) {
+    const name = buttonName(e.button);
+    if (e.button === 2) rightBtnEl.textContent = 'right button: up';
+    log(`pointerup: button=${e.button} (${name}) buttons=${e.buttons} pointerType=${e.pointerType} at (${Math.round(e.clientX)}, ${Math.round(e.clientY)})`);
+    recordButtonEvent(e, 'pointer');
+    setLastEvent(`pointerup (${name})`, 0, 0);
+  }
+
+  // Suppress the browser context menu so right-click down/up can be observed
+  // like any other button instead of being swallowed by a context menu.
+  stage.addEventListener('contextmenu', (e) => {
+    recordButtonEvent(e, 'mouse');
+    e.preventDefault();
+  });
+
+  document.addEventListener('pointerdown', handlePointerDown);
+  document.addEventListener('pointerup', handlePointerUp);
+  document.addEventListener('click', e => recordButtonEvent(e, 'mouse'));
+  document.addEventListener('auxclick', e => recordButtonEvent(e, 'mouse'));
+
+  function handleMouseDown(e) {
+    const name = buttonName(e.button);
+    if (e.button === 2) rightBtnEl.textContent = 'right button: DOWN';
+    log(`mousedown: button=${e.button} (${name}) buttons=${e.buttons} at (${Math.round(e.clientX)}, ${Math.round(e.clientY)})`);
+    recordButtonEvent(e, 'mouse');
+    setLastEvent(`mousedown (${name})`, 0, 0);
+  }
+
+  function handleMouseUp(e) {
+    const name = buttonName(e.button);
+    if (e.button === 2) rightBtnEl.textContent = 'right button: up';
+    log(`mouseup: button=${e.button} (${name}) buttons=${e.buttons} at (${Math.round(e.clientX)}, ${Math.round(e.clientY)})`);
+    recordButtonEvent(e, 'mouse');
+    setLastEvent(`mouseup (${name})`, 0, 0);
+  }
+
+  document.addEventListener('mousedown', handleMouseDown);
+  document.addEventListener('mouseup', handleMouseUp);
+
+  window.addEventListener('keydown', (e) => {
+    log(`keydown: code=${e.code} key=${e.key}`);
+  });
+
+  btnExit.addEventListener('click', async () => {
+    try {
+      if (document.pointerLockElement) document.exitPointerLock();
+      if (document.fullscreenElement) await document.exitFullscreen();
+      log('Exit requested');
+    } catch (e) {
+      log(`Exit failed: ${e.name}: ${e.message}`);
+    }
+    updateStatus();
+  });
+
+  btnClear.addEventListener('click', () => {
+    logEl.textContent = '';
+  });
+
+  btnCenter.addEventListener('click', () => {
+    centerBall();
+    log('Centered ball');
+  });
+
+  btnStartButtons.addEventListener('click', () => {
+    startButtonCapture(testDevice.value);
+  });
+
+  btnStopButtons.addEventListener('click', () => {
+    stopButtonCapture();
+  });
+
+  btnCopyButtons.addEventListener('click', async () => {
+    const snapshot = buttonCaptureSnapshot();
+    if (!snapshot) {
+      log('No button capture is available to copy');
+      return;
+    }
+    const json = JSON.stringify(snapshot, null, 2);
+    console.log(`[PointerButtonTest] JSON\n${json}`);
+    try {
+      await navigator.clipboard.writeText(json);
+      log('Button capture JSON copied to clipboard');
+    } catch (e) {
+      log(`Clipboard copy failed (${e.name}); copy the [PointerButtonTest] JSON from DevTools`);
+    }
+  });
+
+  window.pointerButtonDiagnostics = {
+    start: startButtonCapture,
+    stop: stopButtonCapture,
+    snapshot: buttonCaptureSnapshot
+  };
+
+  updateStatus();
+  centerBall();
+  log(`Init: pointerrawupdate exposed = ${rawExposed}`);
+  console.log(
+    '[PointerButtonTest] Ready. Select the device and click Start button capture, or run ' +
+    'pointerButtonDiagnostics.start("physical-mouse") / start("touchpad").');
+})();
+</script>
+</body>
+</html>
