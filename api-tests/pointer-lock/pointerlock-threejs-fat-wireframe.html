@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Three.js Fat Wireframe - Pointer Lock Mouse</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, sans-serif;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #101216;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #panel {
+      position: fixed;
+      z-index: 2;
+      top: 12px;
+      left: 12px;
+      width: min(390px, calc(100vw - 48px));
+      padding: 14px;
+      border: 1px solid #495267;
+      border-radius: 10px;
+      background: rgb(15 18 25 / 88%);
+      box-shadow: 0 8px 30px rgb(0 0 0 / 35%);
+      backdrop-filter: blur(6px);
+      user-select: none;
+    }
+
+    #panel h1 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+
+    #panel p {
+      margin: 5px 0 10px;
+      color: #bcc7dc;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      padding: 7px 11px;
+      border: 1px solid #60708e;
+      border-radius: 6px;
+      color: #fff;
+      background: #2d4675;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #3a5890;
+    }
+
+    label {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      color: #dce5f5;
+      font-size: 12px;
+    }
+
+    input[type="range"] {
+      width: 110px;
+    }
+
+    #status {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 3px 10px;
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid #394258;
+      font: 12px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .key {
+      color: #94a4bf;
+    }
+
+    .value {
+      overflow-wrap: anywhere;
+      color: #e8eefb;
+    }
+
+    #lock-state.locked {
+      color: #6df0a7;
+    }
+
+    #reticle {
+      position: fixed;
+      z-index: 1;
+      top: 50%;
+      left: 50%;
+      width: 18px;
+      height: 18px;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #reticle::before,
+    #reticle::after {
+      position: absolute;
+      content: "";
+      background: rgb(255 255 255 / 80%);
+    }
+
+    #reticle::before {
+      top: 8px;
+      left: 0;
+      width: 18px;
+      height: 2px;
+    }
+
+    #reticle::after {
+      top: 0;
+      left: 8px;
+      width: 2px;
+      height: 18px;
+    }
+
+    body.locked #reticle {
+      opacity: 1;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://threejs.org/build/three.module.js",
+        "three/addons/": "https://threejs.org/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="panel">
+    <h1>Fat Wireframe Pointer-Lock Test</h1>
+    <p>
+      In unlocked mode, moving over the canvas orbits the camera until the
+      cursor reaches an edge. Pointer-lock mode uses relative
+      movementX/movementY without that boundary. Both modes use exactly the
+      same sensitivity formula. Press Esc to leave pointer lock.
+    </p>
+    <div class="controls">
+      <button id="unlocked-button" type="button">Use unlocked mouse</button>
+      <button id="lock-button" type="button">Enter pointer lock</button>
+      <label>
+        <input id="unadjusted" type="checkbox">
+        unadjustedMovement
+      </label>
+      <label>
+        sensitivity
+        <input id="sensitivity" type="range" min="0.0005" max="0.02"
+               step="0.0005" value="0.004">
+        <span id="sensitivity-value">0.0040</span>
+      </label>
+      <label>
+        line width
+        <input id="line-width" type="range" min="1" max="10"
+               step="0.5" value="5">
+        <span id="line-width-value">5.0</span>
+      </label>
+    </div>
+    <div id="status">
+      <span class="key">input mode</span>
+      <span class="value" id="input-mode">unlocked mousemove</span>
+      <span class="key">pointer lock</span>
+      <span class="value" id="lock-state">unlocked</span>
+      <span class="key">last delta</span>
+      <span class="value" id="last-delta">0, 0</span>
+      <span class="key">accumulated</span>
+      <span class="value" id="accumulated">0, 0</span>
+      <span class="key">mousemove events</span>
+      <span class="value" id="event-count">0</span>
+      <span class="key">input rate</span>
+      <span class="value" id="input-rate">0.0 Hz</span>
+      <span class="key">lock request</span>
+      <span class="value" id="request-status">n/a</span>
+    </div>
+  </div>
+  <div id="reticle" aria-hidden="true"></div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+    import { Wireframe } from 'three/addons/lines/Wireframe.js';
+    import { WireframeGeometry2 } from
+      'three/addons/lines/WireframeGeometry2.js';
+
+    const panel = document.querySelector('#panel');
+    const unlockedButton = document.querySelector('#unlocked-button');
+    const lockButton = document.querySelector('#lock-button');
+    const unadjustedCheckbox = document.querySelector('#unadjusted');
+    const sensitivityInput = document.querySelector('#sensitivity');
+    const sensitivityValue = document.querySelector('#sensitivity-value');
+    const lineWidthInput = document.querySelector('#line-width');
+    const lineWidthValue = document.querySelector('#line-width-value');
+    const inputModeValue = document.querySelector('#input-mode');
+    const lockState = document.querySelector('#lock-state');
+    const lastDelta = document.querySelector('#last-delta');
+    const accumulated = document.querySelector('#accumulated');
+    const eventCount = document.querySelector('#event-count');
+    const inputRate = document.querySelector('#input-rate');
+    const requestStatus = document.querySelector('#request-status');
+
+    const renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x101216, 1);
+    document.body.prepend(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      40,
+      window.innerWidth / window.innerHeight,
+      1,
+      1000,
+    );
+    const target = new THREE.Vector3(0, 0, 0);
+    camera.position.set(-50, 0, 50);
+    camera.lookAt(target);
+
+    const geometry = new WireframeGeometry2(
+      new THREE.IcosahedronGeometry(20, 1),
+    );
+    const material = new LineMaterial({
+      color: 0x4080ff,
+      linewidth: Number(lineWidthInput.value),
+      dashed: false,
+    });
+    const wireframe = new Wireframe(geometry, material);
+    wireframe.computeLineDistances();
+    scene.add(wireframe);
+
+    const spherical = new THREE.Spherical();
+    spherical.setFromVector3(camera.position.clone().sub(target));
+    const epsilon = 0.001;
+
+    let accumulatedX = 0;
+    let accumulatedY = 0;
+    let eventsSinceRateUpdate = 0;
+    let totalEvents = 0;
+    let rateWindowStarted = performance.now();
+    let inputMode = 'unlocked';
+
+    function isLocked() {
+      return document.pointerLockElement === renderer.domElement;
+    }
+
+    function updateCamera(dx, dy) {
+      const sensitivity = Number(sensitivityInput.value);
+      spherical.theta -= dx * sensitivity;
+      spherical.phi -= dy * sensitivity;
+      spherical.phi = THREE.MathUtils.clamp(
+        spherical.phi,
+        epsilon,
+        Math.PI - epsilon,
+      );
+      camera.position.setFromSpherical(spherical).add(target);
+      camera.lookAt(target);
+    }
+
+    function updateRate(now) {
+      const elapsed = now - rateWindowStarted;
+      if (elapsed < 500) return;
+      inputRate.textContent =
+        `${(eventsSinceRateUpdate * 1000 / elapsed).toFixed(1)} Hz`;
+      eventsSinceRateUpdate = 0;
+      rateWindowStarted = now;
+    }
+
+    function resetDiagnostics() {
+      accumulatedX = 0;
+      accumulatedY = 0;
+      eventsSinceRateUpdate = 0;
+      totalEvents = 0;
+      rateWindowStarted = performance.now();
+      lastDelta.textContent = '0, 0';
+      accumulated.textContent = '0, 0';
+      eventCount.textContent = '0';
+      inputRate.textContent = '0.0 Hz';
+    }
+
+    function setInputMode(mode) {
+      if (inputMode !== mode) resetDiagnostics();
+      inputMode = mode;
+      inputModeValue.textContent = mode === 'locked' ?
+        'pointer-locked mousemove' : 'unlocked mousemove';
+      unlockedButton.disabled = mode === 'unlocked';
+    }
+
+    function onMouseMove(event) {
+      const locked = isLocked();
+      if (inputMode === 'locked' && !locked) return;
+      if (inputMode === 'unlocked' &&
+          (locked || event.target !== renderer.domElement)) {
+        return;
+      }
+
+      const dx = event.movementX;
+      const dy = event.movementY;
+      accumulatedX += dx;
+      accumulatedY += dy;
+      totalEvents += 1;
+      eventsSinceRateUpdate += 1;
+
+      updateCamera(dx, dy);
+      lastDelta.textContent = `${dx}, ${dy}`;
+      accumulated.textContent = `${accumulatedX}, ${accumulatedY}`;
+      eventCount.textContent = String(totalEvents);
+      updateRate(performance.now());
+    }
+
+    async function enterPointerLock() {
+      if (isLocked()) return;
+
+      const wantsUnadjusted = unadjustedCheckbox.checked;
+      requestStatus.textContent = wantsUnadjusted ? 'requesting raw' :
+        'requesting default';
+
+      try {
+        const result = wantsUnadjusted ?
+          renderer.domElement.requestPointerLock({unadjustedMovement: true}) :
+          renderer.domElement.requestPointerLock();
+        if (result && typeof result.then === 'function') await result;
+      } catch (error) {
+        if (!wantsUnadjusted) {
+          requestStatus.textContent = `failed: ${error.name}`;
+          return;
+        }
+
+        requestStatus.textContent = 'raw rejected; trying default';
+        try {
+          const fallback = renderer.domElement.requestPointerLock();
+          if (fallback && typeof fallback.then === 'function') await fallback;
+        } catch (fallbackError) {
+          requestStatus.textContent = `failed: ${fallbackError.name}`;
+        }
+      }
+    }
+
+    lockButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      enterPointerLock();
+    });
+
+    unlockedButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (isLocked()) {
+        document.exitPointerLock();
+      } else {
+        setInputMode('unlocked');
+      }
+    });
+    document.addEventListener('mousemove', onMouseMove);
+
+    document.addEventListener('pointerlockchange', () => {
+      const locked = isLocked();
+      document.body.classList.toggle('locked', locked);
+      lockState.classList.toggle('locked', locked);
+      lockState.textContent = locked ? 'LOCKED' : 'unlocked';
+      lockButton.textContent = locked ? 'Pointer locked (Esc to exit)' :
+        'Enter pointer lock';
+      setInputMode(locked ? 'locked' : 'unlocked');
+      requestStatus.textContent = locked ?
+        (unadjustedCheckbox.checked ? 'locked; raw requested' :
+          'locked; default requested') :
+        'n/a';
+    });
+
+    document.addEventListener('pointerlockerror', () => {
+      requestStatus.textContent = 'pointerlockerror';
+    });
+
+    renderer.domElement.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      spherical.radius *= Math.exp(event.deltaY * 0.001);
+      spherical.radius = THREE.MathUtils.clamp(spherical.radius, 30, 250);
+      camera.position.setFromSpherical(spherical).add(target);
+      camera.lookAt(target);
+    }, {passive: false});
+
+    sensitivityInput.addEventListener('input', () => {
+      sensitivityValue.textContent = Number(sensitivityInput.value).toFixed(4);
+    });
+
+    lineWidthInput.addEventListener('input', () => {
+      material.linewidth = Number(lineWidthInput.value);
+      lineWidthValue.textContent = Number(lineWidthInput.value).toFixed(1);
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    setInputMode('unlocked');
+
+    renderer.setAnimationLoop(() => {
+      renderer.render(scene, camera);
+    });
+
+    // Keep clicks on controls from falling through to the canvas.
+    panel.addEventListener('pointerdown', (event) => event.stopPropagation());
+  </script>
+</body>
+</html>
