@@ -403,6 +403,8 @@ flowchart LR
 The lifecycle endpoint and the gamepad Actions decoder are new work. Lifecycle
 routes would be registered in `Source/WebDriver/WebDriverService.cpp`.
 
+- WebKit Issue: https://bugs.webkit.org/show_bug.cgi?id=328912
+
 ### Chromium
 
 ```mermaid
