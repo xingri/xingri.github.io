@@ -41,7 +41,7 @@ Specification status:
 
 ### Chromium
 
-Implementation is under review in Chromium:
+Implementation has been merged on Chromium M152:
 
 - Chromium Review: https://crrev.com/c/7760763
 
